@@ -12,7 +12,7 @@ import '../models/download_model.dart';
 abstract class DownloaderRemoteDataSource {
   /// Downloads the file at [url] and emits [DownloadModel] snapshots
   /// reflecting the current progress and status.
-  Stream<DownloadModel> downloadFile(String url);
+  Stream<DownloadModel> downloadFile(String url, {String? title, dynamic cancelToken});
 }
 
 /// Concrete implementation backed by [Dio].
@@ -25,11 +25,11 @@ class DownloaderRemoteDataSourceImpl implements DownloaderRemoteDataSource {
   DownloaderRemoteDataSourceImpl({required this.dio});
 
   @override
-  Stream<DownloadModel> downloadFile(String url) {
+  Stream<DownloadModel> downloadFile(String url, {String? title, dynamic cancelToken}) {
     final controller = StreamController<DownloadModel>();
 
     // Fire-and-forget — the stream carries the result.
-    _performDownload(url, controller);
+    _performDownload(url, controller, title: title, cancelToken: cancelToken);
 
     return controller.stream;
   }
@@ -40,8 +40,10 @@ class DownloaderRemoteDataSourceImpl implements DownloaderRemoteDataSource {
 
   Future<void> _performDownload(
     String url,
-    StreamController<DownloadModel> controller,
-  ) async {
+    StreamController<DownloadModel> controller, {
+    String? title,
+    dynamic cancelToken,
+  }) async {
     final id = DateTime.now().millisecondsSinceEpoch.toString();
 
     try {
@@ -56,7 +58,7 @@ class DownloaderRemoteDataSourceImpl implements DownloaderRemoteDataSource {
       ));
 
       // Resolve file name from HEAD response or fall back to URL segment.
-      final fileName = await _resolveFileName(url);
+      final fileName = title ?? await _resolveFileName(url);
       final savePath = await _buildSavePath(fileName);
 
       // ── Phase 2: Downloading ──────────────────────────────
@@ -74,6 +76,7 @@ class DownloaderRemoteDataSourceImpl implements DownloaderRemoteDataSource {
       await dio.download(
         url,
         savePath,
+        cancelToken: cancelToken as CancelToken?,
         onReceiveProgress: (received, total) {
           if (total > 0) {
             final progress = (received / total).clamp(0.0, 1.0);

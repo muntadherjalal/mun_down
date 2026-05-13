@@ -1,6 +1,7 @@
-import 'dart:math' as math;
 
 import 'package:flutter/material.dart';
+import '../../../../core/theme/app_theme.dart';
+import '../../../../core/widgets/neon_arc_painter.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 
@@ -10,13 +11,6 @@ import '../bloc/downloader_bloc.dart';
 /// ─────────────────────────────────────────────────────────────
 ///  Design Tokens  (derived from AppTheme palette)
 /// ─────────────────────────────────────────────────────────────
-const _kNeonCyan = Color(0xFF00CEC9);
-const _kNeonPurple = Color(0xFF6C5CE7);
-const _kSurface = Color(0xFF1E1E2C);
-const _kDeepBg = Color(0xFF141422);
-const _kErrorRed = Color(0xFFFF6B6B);
-const _kTextDim = Color(0x99E0E0E0); // 60 % opacity
-const _kGlassWhite = Color(0x14FFFFFF); // 8 % white
 
 /// ─────────────────────────────────────────────────────────────
 ///  Downloader Page
@@ -66,9 +60,22 @@ class _DownloaderPageState extends State<DownloaderPage>
     super.dispose();
   }
 
+  bool _isValidUrl(String url) {
+    return Uri.tryParse(url)?.hasAbsolutePath ?? false;
+  }
+
   void _onDownloadPressed() {
     final url = _urlController.text.trim();
-    if (url.isEmpty) return;
+    if (url.isEmpty || !_isValidUrl(url)) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          backgroundColor: AppTheme.kSurface,
+          content: Text('Please enter a valid URL',
+              style: TextStyle(color: AppTheme.kErrorRed, fontSize: 13)),
+        ),
+      );
+      return;
+    }
     FocusScope.of(context).unfocus();
     context.read<DownloaderBloc>().add(StartDownloadEvent(url: url));
   }
@@ -129,14 +136,14 @@ class _DownloaderPageState extends State<DownloaderPage>
   SliverAppBar _buildAppBar() {
     return SliverAppBar(
       floating: true,
-      backgroundColor: _kDeepBg.withAlpha(230),
+      backgroundColor: AppTheme.kDeepBg.withAlpha(230),
       surfaceTintColor: Colors.transparent,
       title: Row(
         mainAxisSize: MainAxisSize.min,
         children: [
           ShaderMask(
             shaderCallback: (rect) => const LinearGradient(
-              colors: [_kNeonPurple, _kNeonCyan],
+              colors: [AppTheme.kNeonPurple, AppTheme.kNeonCyan],
             ).createShader(rect),
             child: const Icon(Icons.downloading_rounded,
                 color: Colors.white, size: 26),
@@ -176,16 +183,16 @@ class _DownloaderPageState extends State<DownloaderPage>
               gradient: const LinearGradient(
                 begin: Alignment.topLeft,
                 end: Alignment.bottomRight,
-                colors: [_kNeonPurple, _kNeonCyan],
+                colors: [AppTheme.kNeonPurple, AppTheme.kNeonCyan],
               ),
               boxShadow: [
                 BoxShadow(
-                  color: _kNeonCyan.withAlpha(80),
+                  color: AppTheme.kNeonCyan.withAlpha(80),
                   blurRadius: glow,
                   spreadRadius: 2,
                 ),
                 BoxShadow(
-                  color: _kNeonPurple.withAlpha(60),
+                  color: AppTheme.kNeonPurple.withAlpha(60),
                   blurRadius: glow * 1.4,
                   spreadRadius: 1,
                 ),
@@ -216,13 +223,13 @@ class _DownloaderPageState extends State<DownloaderPage>
             decoration: BoxDecoration(
               borderRadius: BorderRadius.circular(16),
               border: Border.all(
-                color: _kNeonCyan.withAlpha(60),
+                color: AppTheme.kNeonCyan.withAlpha(60),
                 width: 1.2,
               ),
-              color: _kSurface,
+              color: AppTheme.kSurface,
               boxShadow: [
                 BoxShadow(
-                  color: _kNeonCyan.withAlpha(18),
+                  color: AppTheme.kNeonCyan.withAlpha(18),
                   blurRadius: 20,
                   offset: const Offset(0, 4),
                 ),
@@ -239,12 +246,12 @@ class _DownloaderPageState extends State<DownloaderPage>
               ),
               decoration: InputDecoration(
                 hintText: 'Paste a video or audio URL…',
-                hintStyle: const TextStyle(color: _kTextDim, fontSize: 14),
+                hintStyle: const TextStyle(color: AppTheme.kTextDim, fontSize: 14),
                 prefixIcon: Padding(
                   padding: const EdgeInsets.only(left: 16, right: 12),
                   child: ShaderMask(
                     shaderCallback: (rect) => const LinearGradient(
-                      colors: [_kNeonPurple, _kNeonCyan],
+                      colors: [AppTheme.kNeonPurple, AppTheme.kNeonCyan],
                     ).createShader(rect),
                     child: const Icon(Icons.link_rounded,
                         color: Colors.white, size: 22),
@@ -260,7 +267,7 @@ class _DownloaderPageState extends State<DownloaderPage>
                     }
                     return IconButton(
                       icon: const Icon(Icons.close_rounded,
-                          color: _kTextDim, size: 20),
+                          color: AppTheme.kTextDim, size: 20),
                       onPressed: _urlController.clear,
                     );
                   },
@@ -294,12 +301,12 @@ class _DownloaderPageState extends State<DownloaderPage>
               decoration: BoxDecoration(
                 borderRadius: BorderRadius.circular(14),
                 gradient: const LinearGradient(
-                  colors: [_kNeonPurple, Color(0xFF8B5CF6), _kNeonCyan],
+                  colors: [AppTheme.kNeonPurple, Color(0xFF8B5CF6), AppTheme.kNeonCyan],
                 ),
                 boxShadow: isIdle
                     ? [
                         BoxShadow(
-                          color: _kNeonPurple.withAlpha(80),
+                          color: AppTheme.kNeonPurple.withAlpha(80),
                           blurRadius: 18,
                           offset: const Offset(0, 6),
                         ),
@@ -390,15 +397,15 @@ class _DownloaderPageState extends State<DownloaderPage>
             borderRadius: BorderRadius.circular(6),
             child: const LinearProgressIndicator(
               minHeight: 5,
-              backgroundColor: _kSurface,
-              valueColor: AlwaysStoppedAnimation<Color>(_kNeonCyan),
+              backgroundColor: AppTheme.kSurface,
+              valueColor: AlwaysStoppedAnimation<Color>(AppTheme.kNeonCyan),
             ),
           ),
           const SizedBox(height: 16),
           Text(
             'Resolving URL…',
             style: TextStyle(
-              color: _kNeonCyan.withAlpha(200),
+              color: AppTheme.kNeonCyan.withAlpha(200),
               fontSize: 14,
               fontWeight: FontWeight.w500,
             ),
@@ -428,7 +435,7 @@ class _DownloaderPageState extends State<DownloaderPage>
                   child: CircularProgressIndicator(
                     value: 1,
                     strokeWidth: 8,
-                    color: _kSurface.withAlpha(180),
+                    color: AppTheme.kSurface.withAlpha(180),
                     strokeCap: StrokeCap.round,
                   ),
                 ),
@@ -440,10 +447,10 @@ class _DownloaderPageState extends State<DownloaderPage>
                     curve: Curves.easeOut,
                     builder: (_, value, _) {
                       return CustomPaint(
-                        painter: _NeonArcPainter(
+                        painter: NeonArcPainter(
                           progress: value,
-                          neonColor: _kNeonCyan,
-                          glowColor: _kNeonCyan.withAlpha(60),
+                          neonColor: AppTheme.kNeonCyan,
+                          glowColor: AppTheme.kNeonCyan.withAlpha(60),
                         ),
                       );
                     },
@@ -465,7 +472,7 @@ class _DownloaderPageState extends State<DownloaderPage>
                     const SizedBox(height: 2),
                     ShaderMask(
                       shaderCallback: (rect) => const LinearGradient(
-                        colors: [_kNeonPurple, _kNeonCyan],
+                        colors: [AppTheme.kNeonPurple, AppTheme.kNeonCyan],
                       ).createShader(rect),
                       child: const Text(
                         'downloading',
@@ -488,14 +495,14 @@ class _DownloaderPageState extends State<DownloaderPage>
             Container(
               padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
               decoration: BoxDecoration(
-                color: _kGlassWhite,
+                color: AppTheme.kGlassWhite,
                 borderRadius: BorderRadius.circular(10),
               ),
               child: Row(
                 mainAxisSize: MainAxisSize.min,
                 children: [
                   const Icon(Icons.insert_drive_file_rounded,
-                      color: _kNeonCyan, size: 18),
+                      color: AppTheme.kNeonCyan, size: 18),
                   const SizedBox(width: 8),
                   Flexible(
                     child: Text(
@@ -530,7 +537,7 @@ class _DownloaderPageState extends State<DownloaderPage>
           end: Alignment.bottomRight,
           colors: [
             const Color(0xFF1A3A2A),
-            _kSurface.withAlpha(200),
+            AppTheme.kSurface.withAlpha(200),
           ],
         ),
         border: Border.all(color: const Color(0xFF2ECC71).withAlpha(50)),
@@ -575,7 +582,7 @@ class _DownloaderPageState extends State<DownloaderPage>
           if (entity.title.isNotEmpty)
             Text(
               entity.title,
-              style: const TextStyle(color: _kTextDim, fontSize: 13),
+              style: const TextStyle(color: AppTheme.kTextDim, fontSize: 13),
               textAlign: TextAlign.center,
               overflow: TextOverflow.ellipsis,
               maxLines: 2,
@@ -616,13 +623,13 @@ class _DownloaderPageState extends State<DownloaderPage>
           end: Alignment.bottomRight,
           colors: [
             const Color(0xFF3A1A1A),
-            _kSurface.withAlpha(200),
+            AppTheme.kSurface.withAlpha(200),
           ],
         ),
-        border: Border.all(color: _kErrorRed.withAlpha(50)),
+        border: Border.all(color: AppTheme.kErrorRed.withAlpha(50)),
         boxShadow: [
           BoxShadow(
-            color: _kErrorRed.withAlpha(20),
+            color: AppTheme.kErrorRed.withAlpha(20),
             blurRadius: 24,
             offset: const Offset(0, 8),
           ),
@@ -635,11 +642,11 @@ class _DownloaderPageState extends State<DownloaderPage>
             height: 56,
             decoration: BoxDecoration(
               shape: BoxShape.circle,
-              color: _kErrorRed.withAlpha(30),
-              border: Border.all(color: _kErrorRed.withAlpha(80)),
+              color: AppTheme.kErrorRed.withAlpha(30),
+              border: Border.all(color: AppTheme.kErrorRed.withAlpha(80)),
             ),
             child: const Icon(Icons.error_outline_rounded,
-                color: _kErrorRed, size: 30),
+                color: AppTheme.kErrorRed, size: 30),
           ),
           const SizedBox(height: 14),
           const Text(
@@ -654,7 +661,7 @@ class _DownloaderPageState extends State<DownloaderPage>
           Text(
             message,
             style: TextStyle(
-              color: _kErrorRed.withAlpha(200),
+              color: AppTheme.kErrorRed.withAlpha(200),
               fontSize: 12,
             ),
             textAlign: TextAlign.center,
@@ -686,7 +693,7 @@ class _DownloaderPageState extends State<DownloaderPage>
                   icon: const Icon(Icons.refresh_rounded, size: 18),
                   label: const Text('Retry'),
                   style: ElevatedButton.styleFrom(
-                    backgroundColor: _kErrorRed,
+                    backgroundColor: AppTheme.kErrorRed,
                     foregroundColor: Colors.white,
                     shape: RoundedRectangleBorder(
                       borderRadius: BorderRadius.circular(12),
@@ -707,64 +714,3 @@ class _DownloaderPageState extends State<DownloaderPage>
 //  Custom Painter: Neon Arc for progress ring
 // ──────────────────────────────────────────────────────────────
 
-class _NeonArcPainter extends CustomPainter {
-  final double progress;
-  final Color neonColor;
-  final Color glowColor;
-
-  _NeonArcPainter({
-    required this.progress,
-    required this.neonColor,
-    required this.glowColor,
-  });
-
-  @override
-  void paint(Canvas canvas, Size size) {
-    final center = Offset(size.width / 2, size.height / 2);
-    final radius = (math.min(size.width, size.height) / 2) - 4;
-    const strokeWidth = 8.0;
-    const startAngle = -math.pi / 2;
-    final sweepAngle = 2 * math.pi * progress;
-
-    // Outer glow
-    final glowPaint = Paint()
-      ..color = glowColor
-      ..style = PaintingStyle.stroke
-      ..strokeWidth = strokeWidth + 8
-      ..strokeCap = StrokeCap.round
-      ..maskFilter = const MaskFilter.blur(BlurStyle.normal, 10);
-
-    canvas.drawArc(
-      Rect.fromCircle(center: center, radius: radius),
-      startAngle,
-      sweepAngle,
-      false,
-      glowPaint,
-    );
-
-    // Main arc
-    final arcPaint = Paint()
-      ..shader = SweepGradient(
-        startAngle: startAngle,
-        endAngle: startAngle + sweepAngle,
-        colors: [_kNeonPurple, neonColor],
-        stops: const [0.0, 1.0],
-        transform: const GradientRotation(-math.pi / 2),
-      ).createShader(Rect.fromCircle(center: center, radius: radius))
-      ..style = PaintingStyle.stroke
-      ..strokeWidth = strokeWidth
-      ..strokeCap = StrokeCap.round;
-
-    canvas.drawArc(
-      Rect.fromCircle(center: center, radius: radius),
-      startAngle,
-      sweepAngle,
-      false,
-      arcPaint,
-    );
-  }
-
-  @override
-  bool shouldRepaint(covariant _NeonArcPainter old) =>
-      old.progress != progress;
-}

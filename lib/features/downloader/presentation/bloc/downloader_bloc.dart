@@ -1,6 +1,7 @@
 import 'dart:async';
 
 import 'package:connectivity_plus/connectivity_plus.dart';
+import 'package:dio/dio.dart';
 import 'package:equatable/equatable.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 
@@ -19,6 +20,7 @@ class DownloaderBloc extends Bloc<DownloaderEvent, DownloaderState> {
   final DownloaderRepository _repository;
   final NetworkInfo _networkInfo;
   StreamSubscription<List<ConnectivityResult>>? _networkSubscription;
+  CancelToken? _cancelToken;
 
   DownloaderBloc({
     required DownloaderRepository repository,
@@ -40,6 +42,7 @@ class DownloaderBloc extends Bloc<DownloaderEvent, DownloaderState> {
   @override
   Future<void> close() {
     _networkSubscription?.cancel();
+    _cancelToken?.cancel();
     return super.close();
   }
 
@@ -57,10 +60,16 @@ class DownloaderBloc extends Bloc<DownloaderEvent, DownloaderState> {
       return;
     }
 
+    _cancelToken = CancelToken();
+
     // `emit.forEach` automatically subscribes, forwards items, and
     // cancels the subscription if the BLoC is closed mid-download.
     await emit.forEach<DownloadEntity>(
-      _repository.startDownload(event.url),
+      _repository.startDownload(
+        event.url,
+        title: event.title,
+        cancelToken: _cancelToken,
+      ),
       onData: (entity) => _mapEntityToState(entity),
       onError: (error, _) =>
           DownloaderFailedState(message: error.toString()),
@@ -71,6 +80,8 @@ class DownloaderBloc extends Bloc<DownloaderEvent, DownloaderState> {
     ResetDownloaderEvent event,
     Emitter<DownloaderState> emit,
   ) {
+    _cancelToken?.cancel();
+    _cancelToken = null;
     emit(const DownloaderInitialState());
   }
 

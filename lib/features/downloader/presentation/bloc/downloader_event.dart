@@ -12,11 +12,12 @@ sealed class DownloaderEvent extends Equatable {
 final class StartDownloadEvent extends DownloaderEvent {
   /// The URL to download from.
   final String url;
+  final String? title;
 
-  const StartDownloadEvent({required this.url});
+  const StartDownloadEvent({required this.url, this.title});
 
   @override
-  List<Object?> get props => [url];
+  List<Object?> get props => [url, title];
 }
 
 /// Fired to reset the BLoC back to its initial state
