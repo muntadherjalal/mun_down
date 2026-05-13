@@ -11,6 +11,9 @@ enum DownloadStatus {
   /// Actively downloading bytes to disk.
   downloading,
 
+  /// Download is paused by the user.
+  paused,
+
   /// Download completed successfully.
   completed,
 
@@ -44,6 +47,15 @@ class DownloadEntity extends Equatable {
   /// Whether this file is locked in the private vault.
   final bool isPrivate;
 
+  /// Total file size in bytes (from Content-Length or stream manifest).
+  final int totalBytes;
+
+  /// Bytes received so far.
+  final int receivedBytes;
+
+  /// URL of the video/audio thumbnail for UI display.
+  final String? thumbnailUrl;
+
   const DownloadEntity({
     required this.id,
     required this.originalUrl,
@@ -52,6 +64,9 @@ class DownloadEntity extends Equatable {
     required this.savePath,
     required this.status,
     this.isPrivate = false,
+    this.totalBytes = 0,
+    this.receivedBytes = 0,
+    this.thumbnailUrl,
   });
 
   @override
@@ -63,5 +78,8 @@ class DownloadEntity extends Equatable {
         savePath,
         status,
         isPrivate,
+        totalBytes,
+        receivedBytes,
+        thumbnailUrl,
       ];
 }

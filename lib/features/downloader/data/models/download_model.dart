@@ -13,6 +13,9 @@ class DownloadModel extends DownloadEntity {
     required super.progress,
     required super.savePath,
     required super.status,
+    super.totalBytes,
+    super.receivedBytes,
+    super.thumbnailUrl,
   });
 
   /// Creates a modified copy of this model.
@@ -23,6 +26,9 @@ class DownloadModel extends DownloadEntity {
     double? progress,
     String? savePath,
     DownloadStatus? status,
+    int? totalBytes,
+    int? receivedBytes,
+    String? thumbnailUrl,
   }) {
     return DownloadModel(
       id: id ?? this.id,
@@ -31,6 +37,9 @@ class DownloadModel extends DownloadEntity {
       progress: progress ?? this.progress,
       savePath: savePath ?? this.savePath,
       status: status ?? this.status,
+      totalBytes: totalBytes ?? this.totalBytes,
+      receivedBytes: receivedBytes ?? this.receivedBytes,
+      thumbnailUrl: thumbnailUrl ?? this.thumbnailUrl,
     );
   }
 }

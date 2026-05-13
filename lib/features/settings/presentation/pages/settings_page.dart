@@ -2,13 +2,14 @@ import 'dart:io';
 
 import 'package:flutter/material.dart';
 import 'package:path_provider/path_provider.dart';
+import 'package:webview_flutter/webview_flutter.dart';
 
 import '../../../../core/themes/app_theme.dart';
 import '../../../../core/utils/file_manager.dart';
+import '../../../../main.dart';
 
 class SettingsPage extends StatefulWidget {
   const SettingsPage({super.key});
-
   @override
   State<SettingsPage> createState() => _SettingsPageState();
 }
@@ -30,9 +31,7 @@ class _SettingsPageState extends State<SettingsPage> {
 
   Future<void> _loadPaths() async {
     final path = await FileManager.downloadsPath;
-    if (mounted) {
-      setState(() => _storagePath = path);
-    }
+    if (mounted) setState(() => _storagePath = path);
   }
 
   Future<void> _calculateCache() async {
@@ -64,6 +63,7 @@ class _SettingsPageState extends State<SettingsPage> {
 
   Future<void> _clearCache() async {
     try {
+      // Clear app temporary directory
       final tempDir = await getTemporaryDirectory();
       if (tempDir.existsSync()) {
         await for (final entity in tempDir.list(recursive: true, followLinks: false)) {
@@ -72,6 +72,12 @@ class _SettingsPageState extends State<SettingsPage> {
           }
         }
       }
+
+      // Clear WebView cookies/cache
+      try {
+        await WebViewCookieManager().clearCookies();
+      } catch (_) {}
+
       await _calculateCache();
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
@@ -85,6 +91,10 @@ class _SettingsPageState extends State<SettingsPage> {
 
   @override
   Widget build(BuildContext context) {
+    // Read current theme mode from the app state
+    final appState = MunDownApp.of(context);
+    final isDark = appState?.isDarkMode ?? true;
+
     return Scaffold(
       backgroundColor: AppTheme.kDeepBg,
       body: SafeArea(
@@ -100,14 +110,9 @@ class _SettingsPageState extends State<SettingsPage> {
                     icon: Icons.folder_outlined,
                     title: 'Storage Location',
                     subtitle: _storagePath,
-                    onTap: () {}, // Read only
-                  ),
-                  _SettingsTile(
-                    icon: Icons.high_quality_outlined,
-                    title: 'Default Quality',
-                    subtitle: 'Highest available',
                     onTap: () {},
                   ),
+                  // "Default Quality" removed per user feedback
                   _SettingsSwitch(
                     icon: Icons.content_paste_rounded,
                     title: 'Auto-paste URL',
@@ -123,13 +128,15 @@ class _SettingsPageState extends State<SettingsPage> {
                     onChanged: (v) => setState(() => _wifiOnly = v),
                   ),
                   const SizedBox(height: 20),
-                  
+
                   _SectionTitle(title: 'Appearance'),
-                  _SettingsTile(
-                    icon: Icons.dark_mode_outlined,
-                    title: 'Theme',
-                    subtitle: 'Dark Mode (Always On)',
-                    onTap: () {},
+                  // Functional Theme Toggle
+                  _SettingsSwitch(
+                    icon: isDark ? Icons.dark_mode_rounded : Icons.light_mode_rounded,
+                    title: 'Dark Mode',
+                    subtitle: isDark ? 'Dark theme active' : 'Light theme active',
+                    value: isDark,
+                    onChanged: (_) => appState?.toggleTheme(),
                   ),
                   _SettingsSwitch(
                     icon: Icons.view_headline_rounded,
@@ -139,7 +146,7 @@ class _SettingsPageState extends State<SettingsPage> {
                     onChanged: (v) => setState(() => _compactList = v),
                   ),
                   const SizedBox(height: 20),
-                  
+
                   _SectionTitle(title: 'Cache & Data'),
                   _SettingsTile(
                     icon: Icons.cleaning_services_outlined,
@@ -154,14 +161,9 @@ class _SettingsPageState extends State<SettingsPage> {
                     onTap: () {},
                   ),
                   const SizedBox(height: 20),
-                  
+
                   _SectionTitle(title: 'About'),
-                  _SettingsTile(
-                    icon: Icons.info_outline_rounded,
-                    title: 'Version',
-                    subtitle: '0.1.0+1',
-                    onTap: () {},
-                  ),
+                  _SettingsTile(icon: Icons.info_outline_rounded, title: 'Version', subtitle: '0.1.0+1', onTap: () {}),
                   _SettingsTile(
                     icon: Icons.code_rounded,
                     title: 'Source Code',
@@ -169,8 +171,7 @@ class _SettingsPageState extends State<SettingsPage> {
                     onTap: () {
                       ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
                         backgroundColor: AppTheme.kSurface,
-                        content: Text('Not implemented in MVP',
-                            style: TextStyle(color: AppTheme.neonPurple, fontSize: 13)),
+                        content: Text('Not implemented in MVP', style: TextStyle(color: AppTheme.neonPurple, fontSize: 13)),
                       ));
                     },
                   ),
@@ -181,8 +182,7 @@ class _SettingsPageState extends State<SettingsPage> {
                     onTap: () {
                       ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
                         backgroundColor: AppTheme.kSurface,
-                        content: Text('Thank you!',
-                            style: TextStyle(color: AppTheme.neonCyan, fontSize: 13)),
+                        content: Text('Thank you!', style: TextStyle(color: AppTheme.neonCyan, fontSize: 13)),
                       ));
                     },
                   ),
@@ -200,23 +200,14 @@ class _SettingsPageState extends State<SettingsPage> {
     return Container(
       padding: const EdgeInsets.fromLTRB(20, 16, 12, 12),
       color: AppTheme.kDeepBg,
-      child: Row(
-        children: [
-          ShaderMask(
-            shaderCallback: (rect) => const LinearGradient(
-              colors: [AppTheme.neonPurple, AppTheme.neonCyan],
-            ).createShader(rect),
-            child: const Icon(Icons.settings_rounded,
-                color: Colors.white, size: 24),
-          ),
-          const SizedBox(width: 10),
-          const Text('Settings',
-              style: TextStyle(
-                  color: Colors.white,
-                  fontSize: 20,
-                  fontWeight: FontWeight.w700)),
-        ],
-      ),
+      child: Row(children: [
+        ShaderMask(
+          shaderCallback: (rect) => const LinearGradient(colors: [AppTheme.neonPurple, AppTheme.neonCyan]).createShader(rect),
+          child: const Icon(Icons.settings_rounded, color: Colors.white, size: 24),
+        ),
+        const SizedBox(width: 10),
+        const Text('Settings', style: TextStyle(color: Colors.white, fontSize: 20, fontWeight: FontWeight.w700)),
+      ]),
     );
   }
 
@@ -226,15 +217,10 @@ class _SettingsPageState extends State<SettingsPage> {
       builder: (_) => AlertDialog(
         backgroundColor: AppTheme.kSurface,
         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
-        title: const Text('Clear Cache',
-            style: TextStyle(color: Colors.white, fontWeight: FontWeight.w600)),
-        content: const Text('This will remove all temporary files.',
-            style: TextStyle(color: AppTheme.kTextDim)),
+        title: const Text('Clear Cache', style: TextStyle(color: Colors.white, fontWeight: FontWeight.w600)),
+        content: const Text('This will remove all temporary files and WebView cookies.', style: TextStyle(color: AppTheme.kTextDim)),
         actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(context),
-            child: const Text('Cancel', style: TextStyle(color: AppTheme.kTextDim)),
-          ),
+          TextButton(onPressed: () => Navigator.pop(context), child: const Text('Cancel', style: TextStyle(color: AppTheme.kTextDim))),
           TextButton(
             onPressed: () {
               Navigator.pop(context);
@@ -251,20 +237,11 @@ class _SettingsPageState extends State<SettingsPage> {
 class _SectionTitle extends StatelessWidget {
   final String title;
   const _SectionTitle({required this.title});
-
   @override
   Widget build(BuildContext context) {
     return Padding(
       padding: const EdgeInsets.only(left: 4, bottom: 8, top: 4),
-      child: Text(
-        title.toUpperCase(),
-        style: TextStyle(
-          color: AppTheme.neonCyan.withAlpha(180),
-          fontSize: 12,
-          fontWeight: FontWeight.w700,
-          letterSpacing: 1.2,
-        ),
-      ),
+      child: Text(title.toUpperCase(), style: TextStyle(color: AppTheme.neonCyan.withAlpha(180), fontSize: 12, fontWeight: FontWeight.w700, letterSpacing: 1.2)),
     );
   }
 }
@@ -274,13 +251,7 @@ class _SettingsTile extends StatelessWidget {
   final String title;
   final String subtitle;
   final VoidCallback onTap;
-
-  const _SettingsTile({
-    required this.icon,
-    required this.title,
-    required this.subtitle,
-    required this.onTap,
-  });
+  const _SettingsTile({required this.icon, required this.title, required this.subtitle, required this.onTap});
 
   @override
   Widget build(BuildContext context) {
@@ -294,30 +265,16 @@ class _SettingsTile extends StatelessWidget {
           onTap: onTap,
           child: Padding(
             padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
-            child: Row(
-              children: [
-                Icon(icon, color: AppTheme.neonPurple, size: 22),
-                const SizedBox(width: 14),
-                Expanded(
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Text(title,
-                          style: const TextStyle(
-                              color: Colors.white,
-                              fontSize: 15,
-                              fontWeight: FontWeight.w500)),
-                      const SizedBox(height: 2),
-                      Text(subtitle,
-                          style:
-                              const TextStyle(color: AppTheme.kTextDim, fontSize: 12)),
-                    ],
-                  ),
-                ),
-                const Icon(Icons.chevron_right_rounded,
-                    color: Colors.white24, size: 22),
-              ],
-            ),
+            child: Row(children: [
+              Icon(icon, color: AppTheme.neonPurple, size: 22),
+              const SizedBox(width: 14),
+              Expanded(child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+                Text(title, style: const TextStyle(color: Colors.white, fontSize: 15, fontWeight: FontWeight.w500)),
+                const SizedBox(height: 2),
+                Text(subtitle, style: const TextStyle(color: AppTheme.kTextDim, fontSize: 12)),
+              ])),
+              const Icon(Icons.chevron_right_rounded, color: Colors.white24, size: 22),
+            ]),
           ),
         ),
       ),
@@ -331,14 +288,7 @@ class _SettingsSwitch extends StatelessWidget {
   final String subtitle;
   final bool value;
   final ValueChanged<bool> onChanged;
-
-  const _SettingsSwitch({
-    required this.icon,
-    required this.title,
-    required this.subtitle,
-    required this.value,
-    required this.onChanged,
-  });
+  const _SettingsSwitch({required this.icon, required this.title, required this.subtitle, required this.value, required this.onChanged});
 
   @override
   Widget build(BuildContext context) {
@@ -352,36 +302,23 @@ class _SettingsSwitch extends StatelessWidget {
           onTap: () => onChanged(!value),
           child: Padding(
             padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
-            child: Row(
-              children: [
-                Icon(icon, color: AppTheme.neonPurple, size: 22),
-                const SizedBox(width: 14),
-                Expanded(
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Text(title,
-                          style: const TextStyle(
-                              color: Colors.white,
-                              fontSize: 15,
-                              fontWeight: FontWeight.w500)),
-                      const SizedBox(height: 2),
-                      Text(subtitle,
-                          style:
-                              const TextStyle(color: AppTheme.kTextDim, fontSize: 12)),
-                    ],
-                  ),
-                ),
-                Switch(
-                  value: value,
-                  onChanged: onChanged,
-                  activeThumbColor: AppTheme.neonCyan,
-                  activeTrackColor: AppTheme.neonCyan.withAlpha(80),
-                  inactiveThumbColor: AppTheme.kTextDim,
-                  inactiveTrackColor: Colors.white12,
-                ),
-              ],
-            ),
+            child: Row(children: [
+              Icon(icon, color: AppTheme.neonPurple, size: 22),
+              const SizedBox(width: 14),
+              Expanded(child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+                Text(title, style: const TextStyle(color: Colors.white, fontSize: 15, fontWeight: FontWeight.w500)),
+                const SizedBox(height: 2),
+                Text(subtitle, style: const TextStyle(color: AppTheme.kTextDim, fontSize: 12)),
+              ])),
+              Switch(
+                value: value,
+                onChanged: onChanged,
+                activeThumbColor: AppTheme.neonCyan,
+                activeTrackColor: AppTheme.neonCyan.withAlpha(80),
+                inactiveThumbColor: AppTheme.kTextDim,
+                inactiveTrackColor: Colors.white12,
+              ),
+            ]),
           ),
         ),
       ),

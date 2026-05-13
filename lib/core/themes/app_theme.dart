@@ -75,4 +75,61 @@ class AppTheme {
       ),
     );
   }
+
+  // ── Light Theme ──────────────────────────────────────────
+  static ThemeData get lightTheme {
+    const lightSurface = Color(0xFFF5F5FA);
+    const lightBg = Color(0xFFFFFFFF);
+    const lightOnSurface = Color(0xFF1E1E2C);
+
+    return ThemeData(
+      useMaterial3: true,
+      brightness: Brightness.light,
+      colorScheme: const ColorScheme.light(
+        primary: _primaryColor,
+        secondary: _secondaryColor,
+        surface: lightSurface,
+        error: _errorColor,
+        onPrimary: Colors.white,
+        onSurface: lightOnSurface,
+      ),
+      scaffoldBackgroundColor: lightBg,
+      appBarTheme: const AppBarTheme(
+        backgroundColor: lightSurface,
+        elevation: 0,
+        centerTitle: true,
+        titleTextStyle: TextStyle(
+          color: lightOnSurface,
+          fontSize: 20,
+          fontWeight: FontWeight.w600,
+        ),
+      ),
+      elevatedButtonTheme: ElevatedButtonThemeData(
+        style: ElevatedButton.styleFrom(
+          backgroundColor: _primaryColor,
+          foregroundColor: Colors.white,
+          shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(12),
+          ),
+          padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 14),
+        ),
+      ),
+      inputDecorationTheme: InputDecorationTheme(
+        filled: true,
+        fillColor: lightSurface,
+        border: OutlineInputBorder(
+          borderRadius: BorderRadius.circular(12),
+          borderSide: BorderSide.none,
+        ),
+        hintStyle: TextStyle(color: lightOnSurface.withAlpha(128)),
+      ),
+      cardTheme: CardThemeData(
+        color: lightSurface,
+        elevation: 2,
+        shape: RoundedRectangleBorder(
+          borderRadius: BorderRadius.circular(16),
+        ),
+      ),
+    );
+  }
 }

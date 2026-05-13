@@ -32,3 +32,13 @@ final class ResetDownloaderEvent extends DownloaderEvent {
 final class NetworkDroppedEvent extends DownloaderEvent {
   const NetworkDroppedEvent();
 }
+
+/// Fired when the user taps the Pause button on an active download.
+final class PauseDownloadEvent extends DownloaderEvent {
+  const PauseDownloadEvent();
+}
+
+/// Fired when the user taps Resume on a paused download.
+final class ResumeDownloadEvent extends DownloaderEvent {
+  const ResumeDownloadEvent();
+}

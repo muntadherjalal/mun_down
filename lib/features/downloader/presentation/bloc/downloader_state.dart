@@ -33,7 +33,17 @@ final class DownloaderProgressState extends DownloaderState {
   const DownloaderProgressState({required this.entity});
 
   @override
-  List<Object?> get props => [entity.progress, entity.id];
+  List<Object?> get props => [entity.progress, entity.id, entity.receivedBytes];
+}
+
+/// Download is paused by the user.
+final class DownloaderPausedState extends DownloaderState {
+  final DownloadEntity entity;
+
+  const DownloaderPausedState({required this.entity});
+
+  @override
+  List<Object?> get props => [entity];
 }
 
 /// Download finished successfully.
