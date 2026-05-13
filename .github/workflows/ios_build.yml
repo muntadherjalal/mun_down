@@ -1,0 +1,47 @@
+name: Build iOS IPA (Unsigned)
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+jobs:
+  build-ios:
+    name: Build Unsigned IPA
+    runs-on: macos-latest
+
+    steps:
+      # ── 1. Checkout ────────────────────────────────────────
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      # ── 2. Setup Flutter ───────────────────────────────────
+      - name: Setup Flutter SDK
+        uses: subosito/flutter-action@v2
+        with:
+          channel: stable
+          cache: true
+
+      # ── 3. Install dependencies ────────────────────────────
+      - name: Install dependencies
+        run: flutter pub get
+
+      # ── 4. Build iOS (no codesign) ─────────────────────────
+      - name: Build iOS release (unsigned)
+        run: flutter build ios --release --no-codesign
+
+      # ── 5. Package as .ipa ─────────────────────────────────
+      - name: Create unsigned IPA
+        run: |
+          mkdir -p Payload
+          mv build/ios/iphoneos/Runner.app Payload/
+          zip -r -9 mun_down.ipa Payload
+
+      # ── 6. Upload artifact ─────────────────────────────────
+      - name: Upload IPA artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: mun_down-ipa
+          path: mun_down.ipa
+          if-no-files-found: error
+          retention-days: 14
