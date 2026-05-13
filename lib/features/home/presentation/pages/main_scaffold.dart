@@ -52,11 +52,11 @@ class _MainScaffoldState extends State<MainScaffold> {
         child: PageView(
           controller: _pageController,
           physics: const NeverScrollableScrollPhysics(),
-          children: const [
-            BrowserPage(),
-            DownloaderPage(),
-            FilesPage(),
-            SettingsPage(),
+          children: [
+            BrowserPage(onTabSwitch: _onTabTapped),
+            const DownloaderPage(),
+            const FilesPage(),
+            const SettingsPage(),
           ],
         ),
       ),

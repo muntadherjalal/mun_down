@@ -1,19 +1,12 @@
 import 'package:flutter/material.dart';
-import 'package:flutter/services.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 
 import '../../../../core/themes/app_theme.dart';
-import '../../../../core/utils/file_manager.dart';
-import '../../../../core/utils/youtube_extractor.dart';
-import '../../../../core/widgets/neon_arc_painter.dart';
-import '../../../../injection_container.dart';
-import '../../../files/presentation/pages/files_page.dart';
 import '../../domain/entities/download_entity.dart';
 import '../bloc/downloader_bloc.dart';
-import '../widgets/quality_bottom_sheet.dart';
 
 /// ─────────────────────────────────────────────────────────────
-///  Downloader Page (Combined Input & List)
+///  Downloader Page (Active/Completed/Failed Downloads Only)
 /// ─────────────────────────────────────────────────────────────
 class DownloaderPage extends StatefulWidget {
   const DownloaderPage({super.key});
@@ -23,134 +16,10 @@ class DownloaderPage extends StatefulWidget {
 }
 
 class _DownloaderPageState extends State<DownloaderPage>
-    with SingleTickerProviderStateMixin, AutomaticKeepAliveClientMixin {
-  final _urlController = TextEditingController();
-  final _focusNode = FocusNode();
-  late final AnimationController _pulseController;
-  bool _extracting = false;
-
+    with AutomaticKeepAliveClientMixin {
+  
   @override
   bool get wantKeepAlive => true;
-
-  @override
-  void initState() {
-    super.initState();
-    _pulseController = AnimationController(
-      vsync: this,
-      duration: const Duration(milliseconds: 1800),
-    )..repeat(reverse: true);
-
-    _autoPasteFromClipboard();
-  }
-
-  Future<void> _autoPasteFromClipboard() async {
-    try {
-      final data = await Clipboard.getData(Clipboard.kTextPlain);
-      if (data?.text != null && data!.text!.contains('http')) {
-        _urlController.text = data.text!.trim();
-      }
-    } catch (_) {}
-  }
-
-  @override
-  void dispose() {
-    _urlController.dispose();
-    _focusNode.dispose();
-    _pulseController.dispose();
-    super.dispose();
-  }
-
-  bool _isValidUrl(String url) {
-    return Uri.tryParse(url)?.hasAbsolutePath ?? false;
-  }
-
-  Future<void> _onDownloadPressed() async {
-    final url = _urlController.text.trim();
-    if (url.isEmpty || !_isValidUrl(url)) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(
-          backgroundColor: AppTheme.kSurface,
-          content: Text('Please enter a valid URL',
-              style: TextStyle(color: AppTheme.kErrorRed, fontSize: 13)),
-        ),
-      );
-      return;
-    }
-    FocusScope.of(context).unfocus();
-
-    if (YouTubeExtractor.isYouTubeUrl(url)) {
-      await _showYouTubeQualitySelector(url);
-    } else {
-      _startDirectDownload(url);
-    }
-  }
-
-  Future<void> _showYouTubeQualitySelector(String url) async {
-    setState(() => _extracting = true);
-    try {
-      final extractor = sl<YouTubeExtractor>();
-      final streams = await extractor.extractStreams(url);
-
-      if (!mounted) return;
-      setState(() => _extracting = false);
-
-      if (streams.isEmpty) {
-        _startDirectDownload(url);
-        return;
-      }
-
-      final selected = await showModalBottomSheet<StreamOption>(
-        context: context,
-        isScrollControlled: true,
-        backgroundColor: Colors.transparent,
-        builder: (_) => QualityBottomSheet(streams: streams),
-      );
-
-      if (selected != null && mounted) {
-        final metadata = DownloadMetadata(
-          title: selected.title,
-          thumbnailUrl: selected.thumbnailUrl,
-          author: selected.author,
-          duration: selected.duration,
-          sourceUrl: url,
-          downloadedAt: DateTime.now(),
-          fileSizeBytes: selected.sizeBytes ?? 0,
-          format: selected.format,
-          quality: selected.quality,
-        );
-        _startDirectDownload(selected.url, metadata: metadata);
-      }
-    } catch (e) {
-      if (mounted) {
-        setState(() => _extracting = false);
-        ScaffoldMessenger.of(context).showSnackBar(SnackBar(
-          backgroundColor: AppTheme.kSurface,
-          content: Text('Extraction failed: $e',
-              style: const TextStyle(color: AppTheme.kErrorRed, fontSize: 13)),
-        ));
-        _startDirectDownload(url);
-      }
-    }
-  }
-
-  void _startDirectDownload(String url, {DownloadMetadata? metadata}) {
-    context.read<DownloaderBloc>().add(
-          StartDownloadEvent(url: url, metadata: metadata),
-        );
-  }
-
-  void _onRetry() {
-    context.read<DownloaderBloc>().add(const ResetDownloaderEvent());
-  }
-
-  void _onNewDownload() {
-    _urlController.clear();
-    context.read<DownloaderBloc>().add(const ResetDownloaderEvent());
-  }
-
-  // ────────────────────────────────────────────────────────────
-  //  Build
-  // ────────────────────────────────────────────────────────────
 
   @override
   Widget build(BuildContext context) {
@@ -158,38 +27,21 @@ class _DownloaderPageState extends State<DownloaderPage>
     return Scaffold(
       backgroundColor: AppTheme.kDeepBg,
       body: SafeArea(
-        child: GestureDetector(
-          onTap: () => FocusScope.of(context).unfocus(),
-          behavior: HitTestBehavior.translucent,
-          child: Column(
-            children: [
-              _buildAppBar(),
-              Expanded(
-                child: ListView(
-                  padding: const EdgeInsets.symmetric(horizontal: 24),
-                  children: [
-                    const SizedBox(height: 16),
-                    _buildUrlInput(),
-                    const SizedBox(height: 16),
-                    _buildDownloadButton(),
-                    const SizedBox(height: 32),
-                    const Text(
-                      'ACTIVE DOWNLOAD',
-                      style: TextStyle(
-                        color: AppTheme.neonCyan,
-                        fontSize: 12,
-                        fontWeight: FontWeight.w700,
-                        letterSpacing: 1.2,
-                      ),
-                    ),
-                    const SizedBox(height: 12),
-                    _buildStateArea(),
-                    const SizedBox(height: 24),
-                  ],
-                ),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            _buildAppBar(),
+            Expanded(
+              child: BlocBuilder<DownloaderBloc, DownloaderState>(
+                builder: (context, state) {
+                  return AnimatedSwitcher(
+                    duration: const Duration(milliseconds: 350),
+                    child: _buildStateContent(context, state),
+                  );
+                },
               ),
-            ],
-          ),
+            ),
+          ],
         ),
       ),
     );
@@ -201,7 +53,7 @@ class _DownloaderPageState extends State<DownloaderPage>
 
   Widget _buildAppBar() {
     return Container(
-      padding: const EdgeInsets.fromLTRB(20, 16, 20, 16),
+      padding: const EdgeInsets.fromLTRB(24, 16, 24, 16),
       child: Row(
         children: [
           ShaderMask(
@@ -209,15 +61,15 @@ class _DownloaderPageState extends State<DownloaderPage>
               colors: [AppTheme.neonPurple, AppTheme.neonCyan],
             ).createShader(rect),
             child: const Icon(Icons.downloading_rounded,
-                color: Colors.white, size: 26),
+                color: Colors.white, size: 28),
           ),
-          const SizedBox(width: 10),
+          const SizedBox(width: 12),
           const Text(
             'Downloads',
             style: TextStyle(
               color: Colors.white,
               fontWeight: FontWeight.w700,
-              fontSize: 22,
+              fontSize: 24,
               letterSpacing: 0.5,
             ),
           ),
@@ -227,424 +79,50 @@ class _DownloaderPageState extends State<DownloaderPage>
   }
 
   // ────────────────────────────────────────────────────────────
-  //  URL Input Field
+  //  State Handling
   // ────────────────────────────────────────────────────────────
 
-  Widget _buildUrlInput() {
-    return BlocBuilder<DownloaderBloc, DownloaderState>(
-      buildWhen: (prev, curr) =>
-          curr is DownloaderInitialState || prev is! DownloaderInitialState,
-      builder: (context, state) {
-        final isActive = state is DownloaderInitialState && !_extracting;
-        return AnimatedOpacity(
-          opacity: isActive ? 1.0 : 0.5,
-          duration: const Duration(milliseconds: 300),
-          child: Container(
-            decoration: BoxDecoration(
-              borderRadius: BorderRadius.circular(16),
-              border: Border.all(
-                color: AppTheme.neonCyan.withAlpha(60),
-                width: 1.2,
-              ),
-              color: AppTheme.kSurface,
-              boxShadow: [
-                BoxShadow(
-                  color: AppTheme.neonCyan.withAlpha(18),
-                  blurRadius: 20,
-                  offset: const Offset(0, 4),
-                ),
-              ],
-            ),
-            child: TextField(
-              controller: _urlController,
-              focusNode: _focusNode,
-              enabled: isActive,
-              style: const TextStyle(
-                color: Colors.white,
-                fontSize: 15,
-                letterSpacing: 0.2,
-              ),
-              decoration: InputDecoration(
-                hintText: 'Paste a video or audio URL…',
-                hintStyle:
-                    const TextStyle(color: AppTheme.kTextDim, fontSize: 14),
-                prefixIcon: Padding(
-                  padding: const EdgeInsets.only(left: 16, right: 12),
-                  child: ShaderMask(
-                    shaderCallback: (rect) => const LinearGradient(
-                      colors: [AppTheme.neonPurple, AppTheme.neonCyan],
-                    ).createShader(rect),
-                    child: const Icon(Icons.link_rounded,
-                        color: Colors.white, size: 22),
-                  ),
-                ),
-                prefixIconConstraints:
-                    const BoxConstraints(minWidth: 50, minHeight: 48),
-                suffixIcon: ValueListenableBuilder<TextEditingValue>(
-                  valueListenable: _urlController,
-                  builder: (_, value, _) {
-                    if (value.text.isEmpty || !isActive) {
-                      return const SizedBox.shrink();
-                    }
-                    return IconButton(
-                      icon: const Icon(Icons.close_rounded,
-                          color: AppTheme.kTextDim, size: 20),
-                      onPressed: _urlController.clear,
-                    );
-                  },
-                ),
-                border: InputBorder.none,
-                contentPadding: const EdgeInsets.symmetric(vertical: 18),
-              ),
-              onSubmitted: (_) => _onDownloadPressed(),
-            ),
-          ),
-        );
-      },
-    );
+  Widget _buildStateContent(BuildContext context, DownloaderState state) {
+    if (state is DownloaderInitialState) {
+      return _buildEmptyState();
+    } else if (state is DownloaderFetchingState) {
+      return _buildFetchingCard();
+    } else if (state is DownloaderProgressState) {
+      return _buildProgressCard(context, state.entity);
+    } else if (state is DownloaderCompletedState) {
+      return _buildCompletedCard(context, state.entity);
+    } else if (state is DownloaderFailedState) {
+      return _buildFailedCard(context, state.message);
+    }
+    return const SizedBox.shrink();
   }
 
   // ────────────────────────────────────────────────────────────
-  //  Download Button
+  //  Empty State
   // ────────────────────────────────────────────────────────────
 
-  Widget _buildDownloadButton() {
-    return BlocBuilder<DownloaderBloc, DownloaderState>(
-      builder: (context, state) {
-        final isIdle = state is DownloaderInitialState && !_extracting;
-        return SizedBox(
-          width: double.infinity,
-          height: 54,
-          child: AnimatedOpacity(
-            opacity: isIdle ? 1.0 : 0.4,
-            duration: const Duration(milliseconds: 300),
-            child: DecoratedBox(
-              decoration: BoxDecoration(
-                borderRadius: BorderRadius.circular(14),
-                gradient: const LinearGradient(
-                  colors: [AppTheme.neonPurple, AppTheme.neonCyan],
-                ),
-                boxShadow: isIdle
-                    ? [
-                        BoxShadow(
-                          color: AppTheme.neonPurple.withAlpha(80),
-                          blurRadius: 18,
-                          offset: const Offset(0, 6),
-                        ),
-                      ]
-                    : [],
-              ),
-              child: ElevatedButton.icon(
-                onPressed: isIdle ? _onDownloadPressed : null,
-                icon: _extracting
-                    ? const SizedBox(
-                        width: 20,
-                        height: 20,
-                        child: CircularProgressIndicator(
-                          strokeWidth: 2,
-                          color: Colors.white,
-                        ),
-                      )
-                    : const Icon(Icons.download_rounded, size: 22),
-                label: Text(
-                  _extracting ? 'Extracting…' : 'Download',
-                  style: const TextStyle(
-                      fontSize: 16,
-                      fontWeight: FontWeight.w600,
-                      letterSpacing: 0.4),
-                ),
-                style: ElevatedButton.styleFrom(
-                  backgroundColor: Colors.transparent,
-                  shadowColor: Colors.transparent,
-                  foregroundColor: Colors.white,
-                  disabledBackgroundColor: Colors.transparent,
-                  disabledForegroundColor: Colors.white70,
-                  shape: RoundedRectangleBorder(
-                    borderRadius: BorderRadius.circular(14),
-                  ),
-                ),
-              ),
-            ),
-          ),
-        );
-      },
-    );
-  }
-
-  // ────────────────────────────────────────────────────────────
-  //  State-driven content area
-  // ────────────────────────────────────────────────────────────
-
-  Widget _buildStateArea() {
-    return BlocConsumer<DownloaderBloc, DownloaderState>(
-      listenWhen: (prev, curr) => curr is DownloaderCompletedState,
-      listener: (context, state) {
-        // Signal the Files tab to rescan its directory.
-        FilesPage.refreshNotifier.value++;
-      },
-      builder: (context, state) {
-        return AnimatedSwitcher(
-          duration: const Duration(milliseconds: 350),
-          switchInCurve: Curves.easeOut,
-          switchOutCurve: Curves.easeIn,
-          child: switch (state) {
-            DownloaderInitialState() => _buildIdleHint(),
-            DownloaderFetchingState() => _buildFetchingIndicator(),
-            DownloaderProgressState(entity: final e) =>
-              _buildProgressRing(e),
-            DownloaderCompletedState(entity: final e) =>
-              _buildCompletedCard(e),
-            DownloaderFailedState(message: final msg) =>
-              _buildErrorCard(msg),
-          },
-        );
-      },
-    );
-  }
-
-  // ── Idle ────────────────────────────────────────────────────
-
-  Widget _buildIdleHint() {
-    return Container(
-      key: const ValueKey('idle'),
-      width: double.infinity,
-      padding: const EdgeInsets.symmetric(vertical: 40),
-      decoration: BoxDecoration(
-        color: AppTheme.kSurface,
-        borderRadius: BorderRadius.circular(16),
-      ),
+  Widget _buildEmptyState() {
+    return Center(
+      key: const ValueKey('empty'),
       child: Column(
+        mainAxisSize: MainAxisSize.min,
         children: [
-          Icon(Icons.inbox_rounded, color: AppTheme.kTextDim.withAlpha(50), size: 48),
-          const SizedBox(height: 12),
-          Text(
-            'No active downloads',
-            style: TextStyle(
-              color: AppTheme.kTextDim.withAlpha(150),
-              fontSize: 14,
-              fontStyle: FontStyle.italic,
-            ),
-            textAlign: TextAlign.center,
-          ),
-        ],
-      ),
-    );
-  }
-
-  // ── Fetching ────────────────────────────────────────────────
-
-  Widget _buildFetchingIndicator() {
-    return Container(
-      key: const ValueKey('fetching'),
-      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 24),
-      decoration: BoxDecoration(
-        color: AppTheme.kSurface,
-        borderRadius: BorderRadius.circular(16),
-      ),
-      child: Column(
-        children: [
-          ClipRRect(
-            borderRadius: BorderRadius.circular(6),
-            child: const LinearProgressIndicator(
-              minHeight: 5,
-              backgroundColor: AppTheme.kDeepBg,
-              valueColor: AlwaysStoppedAnimation<Color>(AppTheme.neonCyan),
-            ),
-          ),
-          const SizedBox(height: 16),
-          Text(
-            'Resolving URL…',
-            style: TextStyle(
-              color: AppTheme.neonCyan.withAlpha(200),
-              fontSize: 14,
-              fontWeight: FontWeight.w500,
-            ),
-          ),
-        ],
-      ),
-    );
-  }
-
-  // ── Progress Ring ───────────────────────────────────────────
-
-  Widget _buildProgressRing(DownloadEntity entity) {
-    final pct = (entity.progress * 100).round();
-    return Container(
-      key: const ValueKey('progress'),
-      padding: const EdgeInsets.symmetric(vertical: 24),
-      decoration: BoxDecoration(
-        color: AppTheme.kSurface,
-        borderRadius: BorderRadius.circular(16),
-      ),
-      child: Column(
-        children: [
-          SizedBox(
-            width: 140,
-            height: 140,
-            child: Stack(
-              alignment: Alignment.center,
-              children: [
-                // Track
-                SizedBox.expand(
-                  child: CircularProgressIndicator(
-                    value: 1,
-                    strokeWidth: 8,
-                    color: AppTheme.kDeepBg,
-                    strokeCap: StrokeCap.round,
-                  ),
-                ),
-                // Neon arc
-                SizedBox.expand(
-                  child: TweenAnimationBuilder<double>(
-                    tween: Tween(begin: 0, end: entity.progress),
-                    duration: const Duration(milliseconds: 300),
-                    curve: Curves.easeOut,
-                    builder: (_, value, _) {
-                      return CustomPaint(
-                        painter: NeonArcPainter(
-                          progress: value,
-                          neonColor: AppTheme.neonCyan,
-                          glowColor: AppTheme.neonCyan.withAlpha(60),
-                        ),
-                      );
-                    },
-                  ),
-                ),
-                // Percentage text
-                Column(
-                  mainAxisSize: MainAxisSize.min,
-                  children: [
-                    Text(
-                      '$pct%',
-                      style: const TextStyle(
-                        color: Colors.white,
-                        fontSize: 32,
-                        fontWeight: FontWeight.w700,
-                        letterSpacing: -0.5,
-                      ),
-                    ),
-                    const SizedBox(height: 2),
-                    ShaderMask(
-                      shaderCallback: (rect) => const LinearGradient(
-                        colors: [AppTheme.neonPurple, AppTheme.neonCyan],
-                      ).createShader(rect),
-                      child: const Text(
-                        'downloading',
-                        style: TextStyle(
-                          color: Colors.white,
-                          fontSize: 11,
-                          fontWeight: FontWeight.w500,
-                          letterSpacing: 1,
-                        ),
-                      ),
-                    ),
-                  ],
-                ),
-              ],
-            ),
-          ),
-          const SizedBox(height: 20),
-          // File name
-          if (entity.title.isNotEmpty)
-            Padding(
-              padding: const EdgeInsets.symmetric(horizontal: 16),
-              child: Container(
-                padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
-                decoration: BoxDecoration(
-                  color: AppTheme.kGlassWhite,
-                  borderRadius: BorderRadius.circular(10),
-                ),
-                child: Row(
-                  mainAxisSize: MainAxisSize.min,
-                  children: [
-                    const Icon(Icons.insert_drive_file_rounded,
-                        color: AppTheme.neonCyan, size: 18),
-                    const SizedBox(width: 8),
-                    Flexible(
-                      child: Text(
-                        entity.title,
-                        style: const TextStyle(
-                          color: Colors.white70,
-                          fontSize: 13,
-                          fontWeight: FontWeight.w500,
-                        ),
-                        overflow: TextOverflow.ellipsis,
-                      ),
-                    ),
-                  ],
-                ),
-              ),
-            ),
-        ],
-      ),
-    );
-  }
-
-  // ── Completed ───────────────────────────────────────────────
-
-  Widget _buildCompletedCard(DownloadEntity entity) {
-    return Container(
-      key: const ValueKey('completed'),
-      width: double.infinity,
-      padding: const EdgeInsets.all(24),
-      decoration: BoxDecoration(
-        borderRadius: BorderRadius.circular(16),
-        color: AppTheme.kSurface,
-        border: Border.all(color: const Color(0xFF2ECC71).withAlpha(50)),
-      ),
-      child: Column(
-        children: [
-          Container(
-            width: 64,
-            height: 64,
-            decoration: BoxDecoration(
-              shape: BoxShape.circle,
-              gradient: const LinearGradient(
-                colors: [Color(0xFF2ECC71), Color(0xFF27AE60)],
-              ),
-              boxShadow: [
-                BoxShadow(
-                  color: const Color(0xFF2ECC71).withAlpha(80),
-                  blurRadius: 20,
-                ),
-              ],
-            ),
-            child:
-                const Icon(Icons.check_rounded, color: Colors.white, size: 36),
-          ),
+          Icon(Icons.download_rounded, color: AppTheme.kTextDim.withAlpha(80), size: 64),
           const SizedBox(height: 16),
           const Text(
-            'Download Complete',
+            'No downloads yet',
             style: TextStyle(
               color: Colors.white,
               fontSize: 18,
-              fontWeight: FontWeight.w700,
+              fontWeight: FontWeight.w600,
             ),
           ),
-          const SizedBox(height: 6),
-          if (entity.title.isNotEmpty)
-            Text(
-              entity.title,
-              style: const TextStyle(color: AppTheme.kTextDim, fontSize: 13),
-              textAlign: TextAlign.center,
-              overflow: TextOverflow.ellipsis,
-              maxLines: 2,
-            ),
-          const SizedBox(height: 20),
-          SizedBox(
-            width: double.infinity,
-            child: OutlinedButton.icon(
-              onPressed: _onNewDownload,
-              icon: const Icon(Icons.add_rounded, size: 20),
-              label: const Text('New Download'),
-              style: OutlinedButton.styleFrom(
-                foregroundColor: const Color(0xFF2ECC71),
-                side: const BorderSide(color: Color(0xFF2ECC71), width: 1.2),
-                shape: RoundedRectangleBorder(
-                  borderRadius: BorderRadius.circular(12),
-                ),
-                padding: const EdgeInsets.symmetric(vertical: 14),
-              ),
+          const SizedBox(height: 8),
+          Text(
+            'Browse the web and tap Download to start',
+            style: TextStyle(
+              color: AppTheme.kTextDim.withAlpha(180),
+              fontSize: 14,
             ),
           ),
         ],
@@ -652,88 +130,475 @@ class _DownloaderPageState extends State<DownloaderPage>
     );
   }
 
-  // ── Failed ──────────────────────────────────────────────────
+  // ────────────────────────────────────────────────────────────
+  //  Fetching State
+  // ────────────────────────────────────────────────────────────
 
-  Widget _buildErrorCard(String message) {
-    return Container(
-      key: const ValueKey('failed'),
-      width: double.infinity,
-      padding: const EdgeInsets.all(24),
-      decoration: BoxDecoration(
-        borderRadius: BorderRadius.circular(16),
-        color: AppTheme.kSurface,
-        border: Border.all(color: AppTheme.kErrorRed.withAlpha(50)),
-      ),
-      child: Column(
-        children: [
-          Container(
-            width: 56,
-            height: 56,
-            decoration: BoxDecoration(
-              shape: BoxShape.circle,
-              color: AppTheme.kErrorRed.withAlpha(30),
-              border: Border.all(color: AppTheme.kErrorRed.withAlpha(80)),
-            ),
-            child: const Icon(Icons.error_outline_rounded,
-                color: AppTheme.kErrorRed, size: 30),
+  Widget _buildFetchingCard() {
+    return ListView(
+      padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 16),
+      children: [
+        Container(
+          key: const ValueKey('fetching'),
+          padding: const EdgeInsets.all(20),
+          decoration: BoxDecoration(
+            color: AppTheme.kSurface,
+            borderRadius: BorderRadius.circular(16),
           ),
-          const SizedBox(height: 14),
-          const Text(
-            'Download Failed',
-            style: TextStyle(
-              color: Colors.white,
-              fontSize: 17,
-              fontWeight: FontWeight.w700,
-            ),
-          ),
-          const SizedBox(height: 6),
-          Text(
-            message,
-            style: TextStyle(
-              color: AppTheme.kErrorRed.withAlpha(200),
-              fontSize: 12,
-            ),
-            textAlign: TextAlign.center,
-            maxLines: 3,
-            overflow: TextOverflow.ellipsis,
-          ),
-          const SizedBox(height: 20),
-          Row(
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              Expanded(
-                child: OutlinedButton.icon(
-                  onPressed: _onNewDownload,
-                  icon: const Icon(Icons.close_rounded, size: 18),
-                  label: const Text('Dismiss'),
-                  style: OutlinedButton.styleFrom(
-                    foregroundColor: Colors.white70,
-                    side: BorderSide(color: Colors.white.withAlpha(40)),
-                    shape: RoundedRectangleBorder(
+              Row(
+                children: [
+                  Container(
+                    width: 48,
+                    height: 48,
+                    decoration: BoxDecoration(
+                      color: AppTheme.neonCyan.withAlpha(20),
                       borderRadius: BorderRadius.circular(12),
                     ),
-                    padding: const EdgeInsets.symmetric(vertical: 13),
+                    child: const Icon(Icons.cloud_download_rounded, color: AppTheme.neonCyan),
                   ),
-                ),
+                  const SizedBox(width: 16),
+                  const Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text('Resolving download...',
+                            style: TextStyle(color: Colors.white, fontSize: 16, fontWeight: FontWeight.w600)),
+                        SizedBox(height: 4),
+                        Text('Extracting media details',
+                            style: TextStyle(color: AppTheme.kTextDim, fontSize: 13)),
+                      ],
+                    ),
+                  ),
+                ],
               ),
-              const SizedBox(width: 12),
-              Expanded(
-                child: ElevatedButton.icon(
-                  onPressed: _onRetry,
-                  icon: const Icon(Icons.refresh_rounded, size: 18),
-                  label: const Text('Retry'),
-                  style: ElevatedButton.styleFrom(
-                    backgroundColor: AppTheme.kErrorRed,
-                    foregroundColor: Colors.white,
-                    shape: RoundedRectangleBorder(
-                      borderRadius: BorderRadius.circular(12),
-                    ),
-                    padding: const EdgeInsets.symmetric(vertical: 13),
-                  ),
+              const SizedBox(height: 24),
+              ClipRRect(
+                borderRadius: BorderRadius.circular(4),
+                child: const LinearProgressIndicator(
+                  minHeight: 6,
+                  backgroundColor: AppTheme.kDeepBg,
+                  valueColor: AlwaysStoppedAnimation<Color>(AppTheme.neonCyan),
                 ),
               ),
             ],
           ),
-        ],
+        ),
+      ],
+    );
+  }
+
+  // ────────────────────────────────────────────────────────────
+  //  In-Progress Card
+  // ────────────────────────────────────────────────────────────
+
+  Widget _buildProgressCard(BuildContext context, DownloadEntity entity) {
+    final titleParts = entity.title.split('.');
+    final formatStr = titleParts.length > 1 ? titleParts.last.toUpperCase() : 'FILE';
+    final displayTitle = entity.title.isNotEmpty ? entity.title : 'Unknown file';
+    final pct = (entity.progress * 100).round();
+    
+    return ListView(
+      padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 16),
+      children: [
+        Container(
+          key: const ValueKey('progress'),
+          padding: const EdgeInsets.all(20),
+          decoration: BoxDecoration(
+            color: AppTheme.kSurface,
+            borderRadius: BorderRadius.circular(16),
+            border: Border.all(color: AppTheme.neonCyan.withAlpha(30)),
+            boxShadow: [
+              BoxShadow(
+                color: AppTheme.neonCyan.withAlpha(10),
+                blurRadius: 16,
+                offset: const Offset(0, 4),
+              ),
+            ],
+          ),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Row(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  // Thumbnail or Icon
+                  Container(
+                    width: 56,
+                    height: 56,
+                    decoration: BoxDecoration(
+                      color: AppTheme.neonCyan.withAlpha(20),
+                      borderRadius: BorderRadius.circular(12),
+                    ),
+                    child: const Icon(Icons.insert_drive_file_rounded, color: AppTheme.neonCyan, size: 28),
+                  ),
+                  const SizedBox(width: 16),
+                  // Info
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(
+                          displayTitle,
+                          style: const TextStyle(color: Colors.white, fontSize: 15, fontWeight: FontWeight.w600),
+                          maxLines: 2,
+                          overflow: TextOverflow.ellipsis,
+                        ),
+                        const SizedBox(height: 6),
+                        _buildFormatBadge(formatStr),
+                      ],
+                    ),
+                  ),
+                ],
+              ),
+              const SizedBox(height: 24),
+              // Progress Bar
+              Row(
+                children: [
+                  Expanded(
+                    child: ClipRRect(
+                      borderRadius: BorderRadius.circular(4),
+                      child: LinearProgressIndicator(
+                        value: entity.progress,
+                        minHeight: 6,
+                        backgroundColor: AppTheme.kDeepBg,
+                        valueColor: const AlwaysStoppedAnimation<Color>(AppTheme.neonCyan),
+                      ),
+                    ),
+                  ),
+                  const SizedBox(width: 12),
+                  Text('$pct%', style: const TextStyle(color: AppTheme.neonCyan, fontSize: 13, fontWeight: FontWeight.w700)),
+                ],
+              ),
+              const SizedBox(height: 12),
+              // Stats
+              Row(
+                children: [
+                  Text(
+                    '${(entity.progress * 100).toStringAsFixed(1)}%',
+                    style: const TextStyle(color: AppTheme.kTextDim, fontSize: 12),
+                  ),
+                  const Text('  •  ', style: TextStyle(color: AppTheme.kTextDim, fontSize: 12)),
+                  const Text(
+                    'Downloading...',
+                    style: TextStyle(color: AppTheme.kTextDim, fontSize: 12),
+                  ),
+                ],
+              ),
+              const SizedBox(height: 24),
+              // Actions
+              Row(
+                children: [
+                  Expanded(
+                    child: OutlinedButton.icon(
+                      onPressed: () {
+                        // Pause is not fully implemented in DownloadDataSource yet,
+                        // but we wire the UI for it.
+                        ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Pause not implemented yet')));
+                      },
+                      icon: const Icon(Icons.pause_rounded, size: 18),
+                      label: const Text('Pause'),
+                      style: OutlinedButton.styleFrom(
+                        foregroundColor: AppTheme.neonCyan,
+                        side: BorderSide(color: AppTheme.neonCyan.withAlpha(100)),
+                        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+                        padding: const EdgeInsets.symmetric(vertical: 12),
+                      ),
+                    ),
+                  ),
+                  const SizedBox(width: 12),
+                  Expanded(
+                    child: OutlinedButton.icon(
+                      onPressed: () {
+                        context.read<DownloaderBloc>().add(const ResetDownloaderEvent());
+                      },
+                      icon: const Icon(Icons.close_rounded, size: 18),
+                      label: const Text('Cancel'),
+                      style: OutlinedButton.styleFrom(
+                        foregroundColor: AppTheme.kErrorRed,
+                        side: BorderSide(color: AppTheme.kErrorRed.withAlpha(100)),
+                        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+                        padding: const EdgeInsets.symmetric(vertical: 12),
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+            ],
+          ),
+        ),
+      ],
+    );
+  }
+
+  // ────────────────────────────────────────────────────────────
+  //  Completed Card
+  // ────────────────────────────────────────────────────────────
+
+  Widget _buildCompletedCard(BuildContext context, DownloadEntity entity) {
+    final titleParts = entity.title.split('.');
+    final formatStr = titleParts.length > 1 ? titleParts.last.toUpperCase() : 'FILE';
+    final displayTitle = entity.title.isNotEmpty ? entity.title : 'Unknown file';
+
+    return ListView(
+      padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 16),
+      children: [
+        Container(
+          key: const ValueKey('completed'),
+          padding: const EdgeInsets.all(20),
+          decoration: BoxDecoration(
+            color: AppTheme.kSurface,
+            borderRadius: BorderRadius.circular(16),
+            border: Border.all(color: const Color(0xFF2ECC71).withAlpha(50)),
+            boxShadow: [
+              BoxShadow(
+                color: const Color(0xFF2ECC71).withAlpha(10),
+                blurRadius: 16,
+                offset: const Offset(0, 4),
+              ),
+            ],
+          ),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Row(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Container(
+                    width: 56,
+                    height: 56,
+                    decoration: BoxDecoration(
+                      color: const Color(0xFF2ECC71).withAlpha(20),
+                      borderRadius: BorderRadius.circular(12),
+                    ),
+                    child: const Icon(Icons.check_circle_outline_rounded, color: Color(0xFF2ECC71), size: 28),
+                  ),
+                  const SizedBox(width: 16),
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(
+                          displayTitle,
+                          style: const TextStyle(color: Colors.white, fontSize: 15, fontWeight: FontWeight.w600),
+                          maxLines: 2,
+                          overflow: TextOverflow.ellipsis,
+                        ),
+                        const SizedBox(height: 8),
+                        Row(
+                          children: [
+                            Container(
+                              padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                              decoration: BoxDecoration(
+                                color: const Color(0xFF2ECC71).withAlpha(20),
+                                borderRadius: BorderRadius.circular(4),
+                              ),
+                              child: const Row(
+                                children: [
+                                  Icon(Icons.check_rounded, color: Color(0xFF2ECC71), size: 12),
+                                  SizedBox(width: 4),
+                                  Text('Complete', style: TextStyle(color: Color(0xFF2ECC71), fontSize: 11, fontWeight: FontWeight.w600)),
+                                ],
+                              ),
+                            ),
+                            const SizedBox(width: 8),
+                            const Text('Done', style: TextStyle(color: AppTheme.kTextDim, fontSize: 12)),
+                            const Text('  •  ', style: TextStyle(color: AppTheme.kTextDim, fontSize: 12)),
+                            Text(formatStr.toUpperCase(), style: const TextStyle(color: AppTheme.kTextDim, fontSize: 12)),
+                          ],
+                        ),
+                      ],
+                    ),
+                  ),
+                ],
+              ),
+              const SizedBox(height: 24),
+              Row(
+                children: [
+                  Expanded(
+                    child: ElevatedButton.icon(
+                      onPressed: () {
+                        // User can go to Library tab to open it
+                        ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Go to Library tab to manage your files')));
+                      },
+                      icon: const Icon(Icons.folder_open_rounded, size: 18),
+                      label: const Text('Library'),
+                      style: ElevatedButton.styleFrom(
+                        backgroundColor: const Color(0xFF2ECC71).withAlpha(30),
+                        foregroundColor: const Color(0xFF2ECC71),
+                        elevation: 0,
+                        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+                        padding: const EdgeInsets.symmetric(vertical: 12),
+                      ),
+                    ),
+                  ),
+                  const SizedBox(width: 12),
+                  Expanded(
+                    child: OutlinedButton.icon(
+                      onPressed: () {
+                        context.read<DownloaderBloc>().add(const ResetDownloaderEvent());
+                      },
+                      icon: const Icon(Icons.close_rounded, size: 18),
+                      label: const Text('Dismiss'),
+                      style: OutlinedButton.styleFrom(
+                        foregroundColor: Colors.white70,
+                        side: BorderSide(color: Colors.white.withAlpha(40)),
+                        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+                        padding: const EdgeInsets.symmetric(vertical: 12),
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+            ],
+          ),
+        ),
+      ],
+    );
+  }
+
+  // ────────────────────────────────────────────────────────────
+  //  Failed Card
+  // ────────────────────────────────────────────────────────────
+
+  Widget _buildFailedCard(BuildContext context, String message) {
+    return ListView(
+      padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 16),
+      children: [
+        Container(
+          key: const ValueKey('failed'),
+          padding: const EdgeInsets.all(20),
+          decoration: BoxDecoration(
+            color: AppTheme.kSurface,
+            borderRadius: BorderRadius.circular(16),
+            border: Border.all(color: AppTheme.kErrorRed.withAlpha(50)),
+            boxShadow: [
+              BoxShadow(
+                color: AppTheme.kErrorRed.withAlpha(10),
+                blurRadius: 16,
+                offset: const Offset(0, 4),
+              ),
+            ],
+          ),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Row(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Container(
+                    width: 56,
+                    height: 56,
+                    decoration: BoxDecoration(
+                      color: AppTheme.kErrorRed.withAlpha(20),
+                      borderRadius: BorderRadius.circular(12),
+                    ),
+                    child: const Icon(Icons.error_outline_rounded, color: AppTheme.kErrorRed, size: 28),
+                  ),
+                  const SizedBox(width: 16),
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        const Text(
+                          'Download Failed',
+                          style: TextStyle(color: Colors.white, fontSize: 15, fontWeight: FontWeight.w600),
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                        ),
+                        const SizedBox(height: 6),
+                        Container(
+                          padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                          decoration: BoxDecoration(
+                            color: AppTheme.kErrorRed.withAlpha(20),
+                            borderRadius: BorderRadius.circular(4),
+                          ),
+                          child: const Row(
+                            mainAxisSize: MainAxisSize.min,
+                            children: [
+                              Icon(Icons.close_rounded, color: AppTheme.kErrorRed, size: 12),
+                              SizedBox(width: 4),
+                              Text('Failed', style: TextStyle(color: AppTheme.kErrorRed, fontSize: 11, fontWeight: FontWeight.w600)),
+                            ],
+                          ),
+                        ),
+                        const SizedBox(height: 8),
+                        Text(
+                          message,
+                          style: const TextStyle(color: AppTheme.kTextDim, fontSize: 13),
+                          maxLines: 2,
+                          overflow: TextOverflow.ellipsis,
+                        ),
+                      ],
+                    ),
+                  ),
+                ],
+              ),
+              const SizedBox(height: 24),
+              Row(
+                children: [
+                  Expanded(
+                    child: ElevatedButton.icon(
+                      onPressed: () {
+                        context.read<DownloaderBloc>().add(const ResetDownloaderEvent());
+                      },
+                      icon: const Icon(Icons.refresh_rounded, size: 18),
+                      label: const Text('Retry'),
+                      style: ElevatedButton.styleFrom(
+                        backgroundColor: AppTheme.kErrorRed.withAlpha(30),
+                        foregroundColor: AppTheme.kErrorRed,
+                        elevation: 0,
+                        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+                        padding: const EdgeInsets.symmetric(vertical: 12),
+                      ),
+                    ),
+                  ),
+                  const SizedBox(width: 12),
+                  Expanded(
+                    child: OutlinedButton.icon(
+                      onPressed: () {
+                        context.read<DownloaderBloc>().add(const ResetDownloaderEvent());
+                      },
+                      icon: const Icon(Icons.close_rounded, size: 18),
+                      label: const Text('Dismiss'),
+                      style: OutlinedButton.styleFrom(
+                        foregroundColor: Colors.white70,
+                        side: BorderSide(color: Colors.white.withAlpha(40)),
+                        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+                        padding: const EdgeInsets.symmetric(vertical: 12),
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+            ],
+          ),
+        ),
+      ],
+    );
+  }
+
+  // ────────────────────────────────────────────────────────────
+  //  Helpers
+  // ────────────────────────────────────────────────────────────
+
+  Widget _buildFormatBadge(String formatStr) {
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+      decoration: BoxDecoration(
+        color: AppTheme.neonPurple.withAlpha(30),
+        borderRadius: BorderRadius.circular(4),
+        border: Border.all(color: AppTheme.neonPurple.withAlpha(60), width: 0.8),
+      ),
+      child: Text(
+        formatStr.toUpperCase(),
+        style: const TextStyle(
+          color: AppTheme.neonPurple,
+          fontSize: 10,
+          fontWeight: FontWeight.w700,
+        ),
       ),
     );
   }

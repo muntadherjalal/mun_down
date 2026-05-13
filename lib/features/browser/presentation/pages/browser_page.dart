@@ -3,14 +3,13 @@ import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:webview_flutter/webview_flutter.dart';
 
 import '../../../../core/themes/app_theme.dart';
-import '../../../../core/utils/file_manager.dart';
-import '../../../../core/utils/youtube_extractor.dart';
-import '../../../../injection_container.dart';
+
 import '../../../downloader/presentation/bloc/downloader_bloc.dart';
-import '../../../downloader/presentation/widgets/quality_bottom_sheet.dart';
 
 class BrowserPage extends StatefulWidget {
-  const BrowserPage({super.key});
+  final void Function(int) onTabSwitch;
+
+  const BrowserPage({super.key, required this.onTabSwitch});
 
   @override
   State<BrowserPage> createState() => _BrowserPageState();
@@ -20,11 +19,11 @@ class _BrowserPageState extends State<BrowserPage>
     with AutomaticKeepAliveClientMixin {
   late final WebViewController _controller;
   final _urlBarController = TextEditingController();
-  
+
   double _loadingProgress = 0;
   bool _isLoading = false;
-  String _currentUrl = 'https://www.youtube.com';
-  bool _extracting = false;
+  String _currentUrl = '';
+  bool _adBlockEnabled = true;
 
   @override
   bool get wantKeepAlive => true;
@@ -32,7 +31,6 @@ class _BrowserPageState extends State<BrowserPage>
   @override
   void initState() {
     super.initState();
-    _urlBarController.text = _currentUrl;
     _initController();
   }
 
@@ -40,7 +38,8 @@ class _BrowserPageState extends State<BrowserPage>
     _controller = WebViewController()
       ..setJavaScriptMode(JavaScriptMode.unrestricted)
       ..setBackgroundColor(AppTheme.kDeepBg)
-      ..setUserAgent('Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36')
+      ..setUserAgent(
+          'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36')
       ..setNavigationDelegate(NavigationDelegate(
         onProgress: (progress) {
           if (mounted) {
@@ -54,20 +53,65 @@ class _BrowserPageState extends State<BrowserPage>
           if (mounted) {
             setState(() {
               _currentUrl = url;
-              _urlBarController.text = url;
+              _urlBarController.text = _isStartPage(url) ? '' : url;
               _isLoading = true;
             });
           }
         },
-        onPageFinished: (_) {
-          if (mounted) setState(() => _isLoading = false);
+        onPageFinished: (url) {
+          if (mounted) {
+            setState(() => _isLoading = false);
+          }
+          if (_adBlockEnabled && !_isStartPage(url)) {
+            _injectAdBlocker();
+          }
+          if (url.contains('youtube.com')) {
+            _injectYouTubeTweaks();
+          }
         },
         onNavigationRequest: (request) {
-          // ALWAYS navigate, do not let external apps open
           return NavigationDecision.navigate;
         },
       ))
-      ..loadRequest(Uri.parse(_currentUrl));
+      ..loadRequest(Uri.parse('about:blank'));
+  }
+
+  bool _isStartPage(String url) {
+    return url.isEmpty || url == 'about:blank';
+  }
+
+  void _injectAdBlocker() {
+    const js = '''
+      (function() {
+        const adSelectors = [
+          'iframe[src*="doubleclick"]',
+          'iframe[src*="googlesyndication"]',
+          'div[class*="ad-"]',
+          'div[id*="ad-"]',
+          'div[class*="banner"]',
+          '[id*="google_ads"]',
+          '.ad-container',
+          '#ad-container',
+          'ins.adsbygoogle'
+        ];
+        adSelectors.forEach(sel => {
+          document.querySelectorAll(sel).forEach(el => el.remove());
+        });
+      })();
+    ''';
+    _controller.runJavaScript(js);
+  }
+
+  void _injectYouTubeTweaks() {
+    const js = '''
+      (function() {
+        const banner = document.getElementById('app-banner');
+        if (banner) banner.remove();
+        const smartBanner = document.querySelector('.smart-banner');
+        if (smartBanner) smartBanner.remove();
+      })();
+    ''';
+    _controller.runJavaScript(js);
   }
 
   @override
@@ -78,7 +122,10 @@ class _BrowserPageState extends State<BrowserPage>
 
   void _navigateTo(String input) {
     var url = input.trim();
-    if (url.isEmpty) return;
+    if (url.isEmpty) {
+      _loadStartPage();
+      return;
+    }
 
     if (!url.startsWith('http://') && !url.startsWith('https://')) {
       if (url.contains('.') && !url.contains(' ')) {
@@ -92,80 +139,25 @@ class _BrowserPageState extends State<BrowserPage>
     FocusScope.of(context).unfocus();
   }
 
-  bool _isDownloadable(String url) {
-    if (YouTubeExtractor.isYouTubeUrl(url)) return true;
-    final ext = url.split('.').last.toLowerCase();
-    return ['mp4', 'mp3', 'mkv', 'webm', 'wav', 'm4a', 'avi'].contains(ext);
+  void _loadStartPage() {
+    _controller.loadRequest(Uri.parse('about:blank'));
+    if (mounted) {
+      setState(() {
+        _currentUrl = 'about:blank';
+        _urlBarController.clear();
+      });
+    }
   }
 
-  Future<void> _onDownloadPressed() async {
+  void _onDownloadPressed() {
     final url = _currentUrl;
-    if (YouTubeExtractor.isYouTubeUrl(url)) {
-      await _showYouTubeQualitySelector(url);
-    } else {
-      _startDirectDownload(url);
-    }
-  }
+    if (_isStartPage(url)) return;
 
-  Future<void> _showYouTubeQualitySelector(String url) async {
-    setState(() => _extracting = true);
-    try {
-      final extractor = sl<YouTubeExtractor>();
-      final streams = await extractor.extractStreams(url);
+    // Dispatch to DownloaderBloc
+    context.read<DownloaderBloc>().add(StartDownloadEvent(url: url));
 
-      if (!mounted) return;
-      setState(() => _extracting = false);
-
-      if (streams.isEmpty) {
-        _startDirectDownload(url);
-        return;
-      }
-
-      final selected = await showModalBottomSheet<StreamOption>(
-        context: context,
-        isScrollControlled: true,
-        backgroundColor: Colors.transparent,
-        builder: (_) => QualityBottomSheet(streams: streams),
-      );
-
-      if (selected != null && mounted) {
-        final metadata = DownloadMetadata(
-          title: selected.title,
-          thumbnailUrl: selected.thumbnailUrl,
-          author: selected.author,
-          duration: selected.duration,
-          sourceUrl: url,
-          downloadedAt: DateTime.now(),
-          fileSizeBytes: selected.sizeBytes ?? 0,
-          format: selected.format,
-          quality: selected.quality,
-        );
-        _startDirectDownload(selected.url, metadata: metadata);
-      }
-    } catch (e) {
-      if (mounted) {
-        setState(() => _extracting = false);
-        ScaffoldMessenger.of(context).showSnackBar(SnackBar(
-          backgroundColor: AppTheme.kSurface,
-          content: Text('Extraction failed: $e',
-              style: const TextStyle(color: AppTheme.kErrorRed, fontSize: 13)),
-        ));
-        _startDirectDownload(url);
-      }
-    }
-  }
-
-  void _startDirectDownload(String url, {DownloadMetadata? metadata}) {
-    context.read<DownloaderBloc>().add(
-          StartDownloadEvent(url: url, metadata: metadata),
-        );
-    ScaffoldMessenger.of(context).showSnackBar(
-      const SnackBar(
-        backgroundColor: AppTheme.kSurface,
-        content: Text('Download started in background',
-            style: TextStyle(color: AppTheme.neonCyan, fontSize: 13)),
-      ),
-    );
+    // Switch to Downloads Tab
+    widget.onTabSwitch(1);
   }
 
   // ────────────────────────────────────────────────────────────
@@ -175,14 +167,14 @@ class _BrowserPageState extends State<BrowserPage>
   @override
   Widget build(BuildContext context) {
     super.build(context);
-    final showFab = _isDownloadable(_currentUrl);
+    final isStartPage = _isStartPage(_currentUrl);
 
     return Scaffold(
       backgroundColor: AppTheme.kDeepBg,
       body: SafeArea(
         child: Column(
           children: [
-            _buildUrlBar(),
+            _buildTopBar(),
             if (_isLoading)
               ClipRRect(
                 child: LinearProgressIndicator(
@@ -196,54 +188,24 @@ class _BrowserPageState extends State<BrowserPage>
               child: Stack(
                 children: [
                   WebViewWidget(controller: _controller),
-                  if (_extracting)
-                    Container(
-                      color: Colors.black54,
-                      child: const Center(
-                        child: CircularProgressIndicator(color: AppTheme.neonCyan),
-                      ),
-                    ),
+                  if (isStartPage) _buildStartPage(),
                 ],
               ),
             ),
+            _buildBottomBar(isStartPage),
           ],
         ),
       ),
-      floatingActionButton: showFab && !_extracting
-          ? FloatingActionButton.extended(
-              onPressed: _onDownloadPressed,
-              backgroundColor: AppTheme.kSurface,
-              icon: ShaderMask(
-                shaderCallback: (rect) => const LinearGradient(
-                  colors: [AppTheme.neonPurple, AppTheme.neonCyan],
-                ).createShader(rect),
-                child: const Icon(Icons.download_rounded, color: Colors.white),
-              ),
-              label: ShaderMask(
-                shaderCallback: (rect) => const LinearGradient(
-                  colors: [AppTheme.neonPurple, AppTheme.neonCyan],
-                ).createShader(rect),
-                child: const Text(
-                  'Download',
-                  style: TextStyle(
-                    color: Colors.white,
-                    fontWeight: FontWeight.w700,
-                  ),
-                ),
-              ),
-            )
-          : null,
     );
   }
 
-  Widget _buildUrlBar() {
+  // ────────────────────────────────────────────────────────────
+  //  Top Bar
+  // ────────────────────────────────────────────────────────────
+
+  Widget _buildTopBar() {
     return Container(
-      padding: const EdgeInsets.only(
-        top: 8,
-        left: 12,
-        right: 12,
-        bottom: 8,
-      ),
+      padding: const EdgeInsets.only(top: 8, left: 8, right: 8, bottom: 8),
       color: AppTheme.kDeepBg,
       child: Row(
         children: [
@@ -257,6 +219,11 @@ class _BrowserPageState extends State<BrowserPage>
             icon: Icons.arrow_forward_ios_rounded,
             onTap: () => _controller.goForward(),
           ),
+          // Home
+          _NavButton(
+            icon: Icons.home_rounded,
+            onTap: _loadStartPage,
+          ),
           const SizedBox(width: 6),
           // URL field
           Expanded(
@@ -267,30 +234,39 @@ class _BrowserPageState extends State<BrowserPage>
                 borderRadius: BorderRadius.circular(12),
                 border: Border.all(color: AppTheme.neonCyan.withAlpha(40)),
               ),
-              child: TextField(
-                controller: _urlBarController,
-                style: const TextStyle(
-                    color: Colors.white, fontSize: 13.5, letterSpacing: 0.2),
-                decoration: InputDecoration(
-                  hintText: 'Search or enter URL…',
-                  hintStyle: const TextStyle(color: AppTheme.kTextDim, fontSize: 13),
-                  prefixIcon: Padding(
-                    padding: const EdgeInsets.only(left: 12, right: 8),
-                    child: ShaderMask(
-                      shaderCallback: (rect) => const LinearGradient(
-                        colors: [AppTheme.neonPurple, AppTheme.neonCyan],
-                      ).createShader(rect),
-                      child: const Icon(Icons.public_rounded,
-                          color: Colors.white, size: 18),
+              child: Row(
+                children: [
+                  Expanded(
+                    child: TextField(
+                      controller: _urlBarController,
+                      style: const TextStyle(
+                          color: Colors.white, fontSize: 13.5, letterSpacing: 0.2),
+                      decoration: const InputDecoration(
+                        hintText: 'Search or enter URL…',
+                        hintStyle: TextStyle(color: AppTheme.kTextDim, fontSize: 13),
+                        contentPadding: EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+                        border: InputBorder.none,
+                      ),
+                      textInputAction: TextInputAction.go,
+                      onSubmitted: _navigateTo,
                     ),
                   ),
-                  prefixIconConstraints:
-                      const BoxConstraints(minWidth: 38, minHeight: 38),
-                  border: InputBorder.none,
-                  contentPadding: const EdgeInsets.symmetric(vertical: 12),
-                ),
-                textInputAction: TextInputAction.go,
-                onSubmitted: _navigateTo,
+                  // Ad Blocker Toggle
+                  InkWell(
+                    borderRadius: BorderRadius.circular(8),
+                    onTap: () {
+                      setState(() => _adBlockEnabled = !_adBlockEnabled);
+                    },
+                    child: Padding(
+                      padding: const EdgeInsets.all(8),
+                      child: Icon(
+                        _adBlockEnabled ? Icons.security_rounded : Icons.security_rounded,
+                        color: _adBlockEnabled ? AppTheme.neonCyan : AppTheme.kTextDim,
+                        size: 20,
+                      ),
+                    ),
+                  ),
+                ],
               ),
             ),
           ),
@@ -298,8 +274,191 @@ class _BrowserPageState extends State<BrowserPage>
           // Reload
           _NavButton(
             icon: _isLoading ? Icons.close_rounded : Icons.refresh_rounded,
-            onTap: () => _isLoading ? null : _controller.reload(), // Note: no stopLoading exposed easily, so we just let it be
+            onTap: () => _isLoading ? null : _controller.reload(),
           ),
+        ],
+      ),
+    );
+  }
+
+  // ────────────────────────────────────────────────────────────
+  //  Bottom Bar
+  // ────────────────────────────────────────────────────────────
+
+  Widget _buildBottomBar(bool isStartPage) {
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
+      decoration: BoxDecoration(
+        color: AppTheme.kSurface,
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black.withAlpha(50),
+            blurRadius: 10,
+            offset: const Offset(0, -4),
+          ),
+        ],
+      ),
+      child: Row(
+        children: [
+          IconButton(
+            icon: const Icon(Icons.bookmark_border_rounded, color: AppTheme.kTextDim),
+            onPressed: () {
+              ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
+                backgroundColor: AppTheme.kSurface,
+                content: Text('Coming soon', style: TextStyle(color: AppTheme.neonCyan, fontSize: 13)),
+              ));
+            },
+          ),
+          IconButton(
+            icon: const Icon(Icons.history_rounded, color: AppTheme.kTextDim),
+            onPressed: () {
+              ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
+                backgroundColor: AppTheme.kSurface,
+                content: Text('Coming soon', style: TextStyle(color: AppTheme.neonCyan, fontSize: 13)),
+              ));
+            },
+          ),
+          const Spacer(),
+          SizedBox(
+            height: 44,
+            child: DecoratedBox(
+              decoration: BoxDecoration(
+                borderRadius: BorderRadius.circular(22),
+                gradient: isStartPage
+                    ? LinearGradient(colors: [Colors.white10, Colors.white10])
+                    : const LinearGradient(colors: [AppTheme.neonPurple, AppTheme.neonCyan]),
+                boxShadow: isStartPage
+                    ? []
+                    : [
+                        BoxShadow(
+                          color: AppTheme.neonCyan.withAlpha(80),
+                          blurRadius: 12,
+                          offset: const Offset(0, 4),
+                        ),
+                      ],
+              ),
+              child: ElevatedButton.icon(
+                onPressed: isStartPage ? null : _onDownloadPressed,
+                icon: Icon(
+                  Icons.download_rounded,
+                  size: 20,
+                  color: isStartPage ? Colors.white38 : Colors.white,
+                ),
+                label: Text(
+                  'Download',
+                  style: TextStyle(
+                    fontSize: 15,
+                    fontWeight: FontWeight.w700,
+                    letterSpacing: 0.5,
+                    color: isStartPage ? Colors.white38 : Colors.white,
+                  ),
+                ),
+                style: ElevatedButton.styleFrom(
+                  backgroundColor: Colors.transparent,
+                  shadowColor: Colors.transparent,
+                  disabledForegroundColor: Colors.white38,
+                  disabledBackgroundColor: Colors.transparent,
+                  padding: const EdgeInsets.symmetric(horizontal: 24),
+                  shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(22),
+                  ),
+                ),
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  // ────────────────────────────────────────────────────────────
+  //  Start Page
+  // ────────────────────────────────────────────────────────────
+
+  Widget _buildStartPage() {
+    return Container(
+      color: AppTheme.kDeepBg,
+      width: double.infinity,
+      height: double.infinity,
+      padding: const EdgeInsets.symmetric(horizontal: 24),
+      child: Column(
+        mainAxisAlignment: MainAxisAlignment.center,
+        children: [
+          Icon(Icons.download_rounded, color: AppTheme.neonCyan, size: 64),
+          const SizedBox(height: 16),
+          const Text(
+            'MunDown Browser',
+            style: TextStyle(
+              color: Colors.white,
+              fontSize: 24,
+              fontWeight: FontWeight.w700,
+            ),
+          ),
+          const SizedBox(height: 32),
+          Container(
+            height: 52,
+            decoration: BoxDecoration(
+              color: AppTheme.kSurface,
+              borderRadius: BorderRadius.circular(26),
+              border: Border.all(color: AppTheme.neonCyan.withAlpha(60)),
+              boxShadow: [
+                BoxShadow(
+                  color: AppTheme.neonCyan.withAlpha(15),
+                  blurRadius: 20,
+                  offset: const Offset(0, 8),
+                ),
+              ],
+            ),
+            child: TextField(
+              decoration: const InputDecoration(
+                hintText: 'Search the web or type a URL...',
+                hintStyle: TextStyle(color: AppTheme.kTextDim, fontSize: 15),
+                prefixIcon: Icon(Icons.search_rounded, color: AppTheme.neonCyan),
+                border: InputBorder.none,
+                contentPadding: EdgeInsets.symmetric(horizontal: 20, vertical: 16),
+              ),
+              style: const TextStyle(color: Colors.white, fontSize: 16),
+              textInputAction: TextInputAction.go,
+              onSubmitted: _navigateTo,
+            ),
+          ),
+          const SizedBox(height: 48),
+          Row(
+            mainAxisAlignment: MainAxisAlignment.spaceEvenly,
+            children: [
+              _ShortcutTile(
+                icon: Icons.play_circle_fill_rounded,
+                label: 'YouTube',
+                color: Colors.redAccent,
+                onTap: () => _navigateTo('https://www.youtube.com'),
+              ),
+              _ShortcutTile(
+                icon: Icons.music_note_rounded,
+                label: 'TikTok',
+                color: Colors.white,
+                onTap: () => _navigateTo('https://www.tiktok.com'),
+              ),
+            ],
+          ),
+          const SizedBox(height: 24),
+          Row(
+            mainAxisAlignment: MainAxisAlignment.spaceEvenly,
+            children: [
+              _ShortcutTile(
+                icon: Icons.camera_alt_rounded,
+                label: 'Instagram',
+                color: Colors.pinkAccent,
+                onTap: () => _navigateTo('https://www.instagram.com'),
+              ),
+              _ShortcutTile(
+                icon: Icons.cloud_rounded,
+                label: 'SoundCloud',
+                color: Colors.orangeAccent,
+                onTap: () => _navigateTo('https://www.soundcloud.com'),
+              ),
+            ],
+          ),
+          const SizedBox(height: 64),
         ],
       ),
     );
@@ -307,7 +466,7 @@ class _BrowserPageState extends State<BrowserPage>
 }
 
 // ──────────────────────────────────────────────────────────────
-//  Small nav button
+//  Small Nav Button
 // ──────────────────────────────────────────────────────────────
 
 class _NavButton extends StatelessWidget {
@@ -322,8 +481,57 @@ class _NavButton extends StatelessWidget {
       borderRadius: BorderRadius.circular(8),
       onTap: onTap,
       child: Padding(
-        padding: const EdgeInsets.all(8),
-        child: Icon(icon, color: Colors.white70, size: 18),
+        padding: const EdgeInsets.all(10),
+        child: Icon(icon, color: Colors.white70, size: 22),
+      ),
+    );
+  }
+}
+
+// ──────────────────────────────────────────────────────────────
+//  Shortcut Tile
+// ──────────────────────────────────────────────────────────────
+
+class _ShortcutTile extends StatelessWidget {
+  final IconData icon;
+  final String label;
+  final Color color;
+  final VoidCallback onTap;
+
+  const _ShortcutTile({
+    required this.icon,
+    required this.label,
+    required this.color,
+    required this.onTap,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return Material(
+      color: AppTheme.kSurface,
+      borderRadius: BorderRadius.circular(16),
+      child: InkWell(
+        borderRadius: BorderRadius.circular(16),
+        onTap: onTap,
+        child: Container(
+          width: 120,
+          padding: const EdgeInsets.symmetric(vertical: 20, horizontal: 12),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Icon(icon, color: color, size: 36),
+              const SizedBox(height: 12),
+              Text(
+                label,
+                style: const TextStyle(
+                  color: Colors.white,
+                  fontSize: 14,
+                  fontWeight: FontWeight.w600,
+                ),
+              ),
+            ],
+          ),
+        ),
       ),
     );
   }
