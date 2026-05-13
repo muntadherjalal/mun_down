@@ -1,3 +1,4 @@
+# Verified build for iOS 14
 # Uncomment this line to define a global platform for your project
 platform :ios, '14.0'
 
