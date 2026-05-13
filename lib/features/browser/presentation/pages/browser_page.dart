@@ -1,50 +1,14 @@
 import 'package:flutter/material.dart';
+import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:webview_flutter/webview_flutter.dart';
 
-/// ─────────────────────────────────────────────────────────────
-///  Design Tokens
-/// ─────────────────────────────────────────────────────────────
-const _kNeonCyan = Color(0xFF00CEC9);
-const _kNeonPurple = Color(0xFF6C5CE7);
-const _kNeonGreen = Color(0xFF2ECC71);
-const _kSurface = Color(0xFF1E1E2C);
-const _kDeepBg = Color(0xFF141422);
-const _kTextDim = Color(0x99E0E0E0);
+import '../../../../core/themes/app_theme.dart';
+import '../../../../core/utils/file_manager.dart';
+import '../../../../core/utils/youtube_extractor.dart';
+import '../../../../injection_container.dart';
+import '../../../downloader/presentation/bloc/downloader_bloc.dart';
+import '../../../downloader/presentation/widgets/quality_bottom_sheet.dart';
 
-/// ─────────────────────────────────────────────────────────────
-///  Known ad / tracking domains
-/// ─────────────────────────────────────────────────────────────
-const _adDomains = <String>[
-  'doubleclick.net',
-  'googleadservices.com',
-  'googlesyndication.com',
-  'googleads.g.doubleclick.net',
-  'adservice.google.com',
-  'pagead2.googlesyndication.com',
-  'ad.doubleclick.net',
-  'ads.yahoo.com',
-  'ads.twitter.com',
-  'facebook.com/tr',
-  'analytics.tiktok.com',
-  'amazon-adsystem.com',
-  'serving-sys.com',
-  'adnxs.com',
-  'adsrvr.org',
-  'taboola.com',
-  'outbrain.com',
-  'moatads.com',
-  'pubmatic.com',
-  'rubiconproject.com',
-  'criteo.com',
-  'quantserve.com',
-  'scorecardresearch.com',
-  'smartadserver.com',
-  'openx.net',
-  'advertising.com',
-  'admob.com',
-];
-
-/// In-app browser tab with ad-blocking and smart navigation.
 class BrowserPage extends StatefulWidget {
   const BrowserPage({super.key});
 
@@ -56,11 +20,11 @@ class _BrowserPageState extends State<BrowserPage>
     with AutomaticKeepAliveClientMixin {
   late final WebViewController _controller;
   final _urlBarController = TextEditingController();
+  
   double _loadingProgress = 0;
   bool _isLoading = false;
-  bool _adBlockEnabled = true;
-  int _adsBlocked = 0;
-  String _currentUrl = 'https://www.google.com';
+  String _currentUrl = 'https://www.youtube.com';
+  bool _extracting = false;
 
   @override
   bool get wantKeepAlive => true;
@@ -75,7 +39,8 @@ class _BrowserPageState extends State<BrowserPage>
   void _initController() {
     _controller = WebViewController()
       ..setJavaScriptMode(JavaScriptMode.unrestricted)
-      ..setBackgroundColor(_kDeepBg)
+      ..setBackgroundColor(AppTheme.kDeepBg)
+      ..setUserAgent('Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36')
       ..setNavigationDelegate(NavigationDelegate(
         onProgress: (progress) {
           if (mounted) {
@@ -91,7 +56,6 @@ class _BrowserPageState extends State<BrowserPage>
               _currentUrl = url;
               _urlBarController.text = url;
               _isLoading = true;
-              _adsBlocked = 0; // Reset per-page counter.
             });
           }
         },
@@ -99,22 +63,11 @@ class _BrowserPageState extends State<BrowserPage>
           if (mounted) setState(() => _isLoading = false);
         },
         onNavigationRequest: (request) {
-          if (_adBlockEnabled && _isAdUrl(request.url)) {
-            if (mounted) setState(() => _adsBlocked++);
-            return NavigationDecision.prevent;
-          }
+          // ALWAYS navigate, do not let external apps open
           return NavigationDecision.navigate;
         },
       ))
       ..loadRequest(Uri.parse(_currentUrl));
-  }
-
-  /// Checks if a URL belongs to a known ad/tracking domain.
-  bool _isAdUrl(String url) {
-    final uri = Uri.tryParse(url);
-    if (uri == null) return false;
-    final host = uri.host.toLowerCase();
-    return _adDomains.any((domain) => host.contains(domain));
   }
 
   @override
@@ -139,31 +92,80 @@ class _BrowserPageState extends State<BrowserPage>
     FocusScope.of(context).unfocus();
   }
 
-  void _toggleAdBlock() {
-    setState(() => _adBlockEnabled = !_adBlockEnabled);
-    ScaffoldMessenger.of(context).showSnackBar(SnackBar(
-      backgroundColor: _kSurface,
-      behavior: SnackBarBehavior.floating,
-      duration: const Duration(seconds: 2),
-      content: Row(
-        children: [
-          Icon(
-            _adBlockEnabled ? Icons.shield_rounded : Icons.shield_outlined,
-            color: _adBlockEnabled ? _kNeonGreen : _kTextDim,
-            size: 18,
-          ),
-          const SizedBox(width: 10),
-          Text(
-            _adBlockEnabled ? 'Ad-Blocker enabled' : 'Ad-Blocker disabled',
-            style: TextStyle(
-              color: _adBlockEnabled ? _kNeonGreen : _kTextDim,
-              fontSize: 13,
-              fontWeight: FontWeight.w500,
-            ),
-          ),
-        ],
+  bool _isDownloadable(String url) {
+    if (YouTubeExtractor.isYouTubeUrl(url)) return true;
+    final ext = url.split('.').last.toLowerCase();
+    return ['mp4', 'mp3', 'mkv', 'webm', 'wav', 'm4a', 'avi'].contains(ext);
+  }
+
+  Future<void> _onDownloadPressed() async {
+    final url = _currentUrl;
+    if (YouTubeExtractor.isYouTubeUrl(url)) {
+      await _showYouTubeQualitySelector(url);
+    } else {
+      _startDirectDownload(url);
+    }
+  }
+
+  Future<void> _showYouTubeQualitySelector(String url) async {
+    setState(() => _extracting = true);
+    try {
+      final extractor = sl<YouTubeExtractor>();
+      final streams = await extractor.extractStreams(url);
+
+      if (!mounted) return;
+      setState(() => _extracting = false);
+
+      if (streams.isEmpty) {
+        _startDirectDownload(url);
+        return;
+      }
+
+      final selected = await showModalBottomSheet<StreamOption>(
+        context: context,
+        isScrollControlled: true,
+        backgroundColor: Colors.transparent,
+        builder: (_) => QualityBottomSheet(streams: streams),
+      );
+
+      if (selected != null && mounted) {
+        final metadata = DownloadMetadata(
+          title: selected.title,
+          thumbnailUrl: selected.thumbnailUrl,
+          author: selected.author,
+          duration: selected.duration,
+          sourceUrl: url,
+          downloadedAt: DateTime.now(),
+          fileSizeBytes: selected.sizeBytes ?? 0,
+          format: selected.format,
+          quality: selected.quality,
+        );
+        _startDirectDownload(selected.url, metadata: metadata);
+      }
+    } catch (e) {
+      if (mounted) {
+        setState(() => _extracting = false);
+        ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+          backgroundColor: AppTheme.kSurface,
+          content: Text('Extraction failed: $e',
+              style: const TextStyle(color: AppTheme.kErrorRed, fontSize: 13)),
+        ));
+        _startDirectDownload(url);
+      }
+    }
+  }
+
+  void _startDirectDownload(String url, {DownloadMetadata? metadata}) {
+    context.read<DownloaderBloc>().add(
+          StartDownloadEvent(url: url, metadata: metadata),
+        );
+    ScaffoldMessenger.of(context).showSnackBar(
+      const SnackBar(
+        backgroundColor: AppTheme.kSurface,
+        content: Text('Download started in background',
+            style: TextStyle(color: AppTheme.neonCyan, fontSize: 13)),
       ),
-    ));
+    );
   }
 
   // ────────────────────────────────────────────────────────────
@@ -173,34 +175,76 @@ class _BrowserPageState extends State<BrowserPage>
   @override
   Widget build(BuildContext context) {
     super.build(context);
-    return Column(
-      children: [
-        _buildUrlBar(),
-        if (_isLoading)
-          ClipRRect(
-            child: LinearProgressIndicator(
-              value: _loadingProgress,
-              minHeight: 2.5,
-              backgroundColor: _kSurface,
-              valueColor: const AlwaysStoppedAnimation<Color>(_kNeonCyan),
+    final showFab = _isDownloadable(_currentUrl);
+
+    return Scaffold(
+      backgroundColor: AppTheme.kDeepBg,
+      body: SafeArea(
+        child: Column(
+          children: [
+            _buildUrlBar(),
+            if (_isLoading)
+              ClipRRect(
+                child: LinearProgressIndicator(
+                  value: _loadingProgress,
+                  minHeight: 2.5,
+                  backgroundColor: AppTheme.kSurface,
+                  valueColor: const AlwaysStoppedAnimation<Color>(AppTheme.neonCyan),
+                ),
+              ),
+            Expanded(
+              child: Stack(
+                children: [
+                  WebViewWidget(controller: _controller),
+                  if (_extracting)
+                    Container(
+                      color: Colors.black54,
+                      child: const Center(
+                        child: CircularProgressIndicator(color: AppTheme.neonCyan),
+                      ),
+                    ),
+                ],
+              ),
             ),
-          ),
-        Expanded(
-          child: WebViewWidget(controller: _controller),
+          ],
         ),
-      ],
+      ),
+      floatingActionButton: showFab && !_extracting
+          ? FloatingActionButton.extended(
+              onPressed: _onDownloadPressed,
+              backgroundColor: AppTheme.kSurface,
+              icon: ShaderMask(
+                shaderCallback: (rect) => const LinearGradient(
+                  colors: [AppTheme.neonPurple, AppTheme.neonCyan],
+                ).createShader(rect),
+                child: const Icon(Icons.download_rounded, color: Colors.white),
+              ),
+              label: ShaderMask(
+                shaderCallback: (rect) => const LinearGradient(
+                  colors: [AppTheme.neonPurple, AppTheme.neonCyan],
+                ).createShader(rect),
+                child: const Text(
+                  'Download',
+                  style: TextStyle(
+                    color: Colors.white,
+                    fontWeight: FontWeight.w700,
+                  ),
+                ),
+              ),
+            )
+          : null,
     );
   }
 
   Widget _buildUrlBar() {
     return Container(
-      padding: EdgeInsets.only(
-        top: MediaQuery.of(context).padding.top + 8,
+      padding: const EdgeInsets.only(
+        top: 8,
         left: 12,
         right: 12,
         bottom: 8,
       ),
-      color: _kDeepBg,
+      color: AppTheme.kDeepBg,
       child: Row(
         children: [
           // Back
@@ -219,9 +263,9 @@ class _BrowserPageState extends State<BrowserPage>
             child: Container(
               height: 42,
               decoration: BoxDecoration(
-                color: _kSurface,
+                color: AppTheme.kSurface,
                 borderRadius: BorderRadius.circular(12),
-                border: Border.all(color: _kNeonCyan.withAlpha(40)),
+                border: Border.all(color: AppTheme.neonCyan.withAlpha(40)),
               ),
               child: TextField(
                 controller: _urlBarController,
@@ -229,12 +273,12 @@ class _BrowserPageState extends State<BrowserPage>
                     color: Colors.white, fontSize: 13.5, letterSpacing: 0.2),
                 decoration: InputDecoration(
                   hintText: 'Search or enter URL…',
-                  hintStyle: const TextStyle(color: _kTextDim, fontSize: 13),
+                  hintStyle: const TextStyle(color: AppTheme.kTextDim, fontSize: 13),
                   prefixIcon: Padding(
                     padding: const EdgeInsets.only(left: 12, right: 8),
                     child: ShaderMask(
                       shaderCallback: (rect) => const LinearGradient(
-                        colors: [_kNeonPurple, _kNeonCyan],
+                        colors: [AppTheme.neonPurple, AppTheme.neonCyan],
                       ).createShader(rect),
                       child: const Icon(Icons.public_rounded,
                           color: Colors.white, size: 18),
@@ -251,94 +295,11 @@ class _BrowserPageState extends State<BrowserPage>
             ),
           ),
           const SizedBox(width: 6),
-          // Ad-Blocker shield toggle
-          _ShieldButton(
-            enabled: _adBlockEnabled,
-            adsBlocked: _adsBlocked,
-            onTap: _toggleAdBlock,
-          ),
-          const SizedBox(width: 2),
           // Reload
           _NavButton(
             icon: _isLoading ? Icons.close_rounded : Icons.refresh_rounded,
-            onTap: () => _controller.reload(),
+            onTap: () => _isLoading ? null : _controller.reload(), // Note: no stopLoading exposed easily, so we just let it be
           ),
-        ],
-      ),
-    );
-  }
-}
-
-// ──────────────────────────────────────────────────────────────
-//  Shield Button (Ad-Blocker toggle)
-// ──────────────────────────────────────────────────────────────
-
-class _ShieldButton extends StatelessWidget {
-  final bool enabled;
-  final int adsBlocked;
-  final VoidCallback onTap;
-
-  const _ShieldButton({
-    required this.enabled,
-    required this.adsBlocked,
-    required this.onTap,
-  });
-
-  @override
-  Widget build(BuildContext context) {
-    return InkWell(
-      borderRadius: BorderRadius.circular(8),
-      onTap: onTap,
-      child: Stack(
-        clipBehavior: Clip.none,
-        children: [
-          Padding(
-            padding: const EdgeInsets.all(8),
-            child: ShaderMask(
-              shaderCallback: enabled
-                  ? (rect) => const LinearGradient(
-                        colors: [_kNeonGreen, _kNeonCyan],
-                      ).createShader(rect)
-                  : (rect) => LinearGradient(
-                        colors: [
-                          Colors.white.withAlpha(60),
-                          Colors.white.withAlpha(60),
-                        ],
-                      ).createShader(rect),
-              child: Icon(
-                enabled ? Icons.shield_rounded : Icons.shield_outlined,
-                color: Colors.white,
-                size: 20,
-              ),
-            ),
-          ),
-          // Badge: number of ads blocked on this page.
-          if (enabled && adsBlocked > 0)
-            Positioned(
-              top: 2,
-              right: 2,
-              child: Container(
-                padding: const EdgeInsets.all(3),
-                decoration: BoxDecoration(
-                  color: _kNeonGreen,
-                  shape: BoxShape.circle,
-                  boxShadow: [
-                    BoxShadow(
-                      color: _kNeonGreen.withAlpha(120),
-                      blurRadius: 6,
-                    ),
-                  ],
-                ),
-                child: Text(
-                  adsBlocked > 99 ? '99+' : '$adsBlocked',
-                  style: const TextStyle(
-                    color: Colors.white,
-                    fontSize: 8,
-                    fontWeight: FontWeight.w800,
-                  ),
-                ),
-              ),
-            ),
         ],
       ),
     );

@@ -17,8 +17,8 @@ class DownloaderRepositoryImpl implements DownloaderRepository {
   DownloaderRepositoryImpl({required this.remoteDataSource});
 
   @override
-  Stream<DownloadEntity> startDownload(String url, {String? title, dynamic cancelToken}) async* {
-    yield* remoteDataSource.downloadFile(url, title: title, cancelToken: cancelToken).transform(
+  Stream<DownloadEntity> startDownload(String url, {dynamic metadata, dynamic cancelToken}) async* {
+    yield* remoteDataSource.downloadFile(url, metadata: metadata, cancelToken: cancelToken).transform(
           StreamTransformer<DownloadModel, DownloadEntity>.fromHandlers(
             handleData: (model, sink) {
               sink.add(model);

@@ -1,24 +1,46 @@
 import 'package:flutter/material.dart';
 
+import '../../../../core/themes/app_theme.dart';
 import '../../../../core/utils/youtube_extractor.dart';
 
-const _kNeonCyan = Color(0xFF00CEC9);
-const _kNeonPurple = Color(0xFF6C5CE7);
-const _kSurface = Color(0xFF1E1E2C);
-const _kDeepBg = Color(0xFF141422);
-const _kTextDim = Color(0x99E0E0E0);
-
 /// A sleek bottom sheet that displays available YouTube stream qualities.
-class QualityBottomSheet extends StatelessWidget {
+class QualityBottomSheet extends StatefulWidget {
   final List<StreamOption> streams;
 
   const QualityBottomSheet({super.key, required this.streams});
 
   @override
+  State<QualityBottomSheet> createState() => _QualityBottomSheetState();
+}
+
+class _QualityBottomSheetState extends State<QualityBottomSheet> {
+  StreamOption? _selectedStream;
+
+  @override
+  void initState() {
+    super.initState();
+    if (widget.streams.isNotEmpty) {
+      // Default to highest video quality, or highest audio if no video
+      final videos = widget.streams.where((s) => !s.isAudioOnly).toList();
+      if (videos.isNotEmpty) {
+        _selectedStream = videos.first;
+      } else {
+        _selectedStream = widget.streams.first;
+      }
+    }
+  }
+
+  @override
   Widget build(BuildContext context) {
     // Separate video and audio streams.
-    final videoStreams = streams.where((s) => !s.isAudioOnly).toList();
-    final audioStreams = streams.where((s) => s.isAudioOnly).toList();
+    final videoStreams = widget.streams.where((s) => !s.isAudioOnly).toList();
+    // Sort video by size/quality (assuming they are already sorted by extractor, but just to be sure)
+    
+    var audioStreams = widget.streams.where((s) => s.isAudioOnly).toList();
+    // Keep top 3 audio streams
+    if (audioStreams.length > 3) {
+      audioStreams = audioStreams.take(3).toList();
+    }
 
     return DraggableScrollableSheet(
       initialChildSize: 0.55,
@@ -27,7 +49,7 @@ class QualityBottomSheet extends StatelessWidget {
       builder: (_, scrollController) {
         return Container(
           decoration: const BoxDecoration(
-            color: _kDeepBg,
+            color: AppTheme.kDeepBg,
             borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
           ),
           child: Column(
@@ -52,7 +74,7 @@ class QualityBottomSheet extends StatelessWidget {
                   children: [
                     ShaderMask(
                       shaderCallback: (r) => const LinearGradient(
-                        colors: [_kNeonPurple, _kNeonCyan],
+                        colors: [AppTheme.neonPurple, AppTheme.neonCyan],
                       ).createShader(r),
                       child: const Icon(Icons.high_quality_rounded,
                           color: Colors.white, size: 24),
@@ -82,23 +104,37 @@ class QualityBottomSheet extends StatelessWidget {
                       ...videoStreams.map((s) => _StreamTile(
                             stream: s,
                             icon: Icons.videocam_rounded,
-                            accentColor: _kNeonPurple,
-                            onTap: () => Navigator.pop(context, s),
+                            accentColor: AppTheme.neonPurple,
+                            isSelected: _selectedStream == s,
+                            onTap: () => setState(() => _selectedStream = s),
                           )),
                     ],
                     if (audioStreams.isNotEmpty) ...[
                       const SizedBox(height: 12),
                       _sectionLabel('AUDIO ONLY'),
-                      ...audioStreams.map((s) => _StreamTile(
-                            stream: s,
-                            icon: Icons.audiotrack_rounded,
-                            accentColor: _kNeonCyan,
-                            onTap: () => Navigator.pop(context, s),
-                          )),
+                      ...audioStreams.asMap().entries.map((entry) {
+                        final idx = entry.key;
+                        final s = entry.value;
+                        // Map index to High/Medium/Low
+                        String audioLabel = 'High';
+                        if (idx == 1) audioLabel = 'Medium';
+                        if (idx == 2) audioLabel = 'Low';
+
+                        return _StreamTile(
+                          stream: s,
+                          customLabel: '$audioLabel Quality (${s.quality})',
+                          icon: Icons.audiotrack_rounded,
+                          accentColor: AppTheme.neonCyan,
+                          isSelected: _selectedStream == s,
+                          onTap: () => setState(() => _selectedStream = s),
+                        );
+                      }),
                     ],
                   ],
                 ),
               ),
+              // Download Button Fixed at Bottom
+              _buildDownloadButton(),
             ],
           ),
         );
@@ -112,10 +148,68 @@ class QualityBottomSheet extends StatelessWidget {
       child: Text(
         text,
         style: TextStyle(
-          color: _kNeonCyan.withAlpha(180),
+          color: AppTheme.neonCyan.withAlpha(180),
           fontSize: 11,
           fontWeight: FontWeight.w700,
           letterSpacing: 1.4,
+        ),
+      ),
+    );
+  }
+
+  Widget _buildDownloadButton() {
+    return Container(
+      padding: const EdgeInsets.fromLTRB(20, 16, 20, 32), // Add bottom padding for SafeArea
+      decoration: BoxDecoration(
+        color: AppTheme.kDeepBg,
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black.withAlpha(50),
+            blurRadius: 10,
+            offset: const Offset(0, -5),
+          ),
+        ],
+      ),
+      child: SizedBox(
+        width: double.infinity,
+        height: 54,
+        child: DecoratedBox(
+          decoration: BoxDecoration(
+            borderRadius: BorderRadius.circular(14),
+            gradient: const LinearGradient(
+              colors: [AppTheme.neonPurple, AppTheme.neonCyan],
+            ),
+            boxShadow: [
+              BoxShadow(
+                color: AppTheme.neonPurple.withAlpha(80),
+                blurRadius: 18,
+                offset: const Offset(0, 6),
+              ),
+            ],
+          ),
+          child: ElevatedButton.icon(
+            onPressed: () {
+              if (_selectedStream != null) {
+                Navigator.pop(context, _selectedStream);
+              }
+            },
+            icon: const Icon(Icons.download_rounded, size: 22),
+            label: const Text(
+              'Download',
+              style: TextStyle(
+                  fontSize: 16,
+                  fontWeight: FontWeight.w600,
+                  letterSpacing: 0.4),
+            ),
+            style: ElevatedButton.styleFrom(
+              backgroundColor: Colors.transparent,
+              shadowColor: Colors.transparent,
+              foregroundColor: Colors.white,
+              shape: RoundedRectangleBorder(
+                borderRadius: BorderRadius.circular(14),
+              ),
+            ),
+          ),
         ),
       ),
     );
@@ -124,69 +218,84 @@ class QualityBottomSheet extends StatelessWidget {
 
 class _StreamTile extends StatelessWidget {
   final StreamOption stream;
+  final String? customLabel;
   final IconData icon;
   final Color accentColor;
+  final bool isSelected;
   final VoidCallback onTap;
 
   const _StreamTile({
     required this.stream,
+    this.customLabel,
     required this.icon,
     required this.accentColor,
+    required this.isSelected,
     required this.onTap,
   });
 
   @override
   Widget build(BuildContext context) {
     return Padding(
-      padding: const EdgeInsets.only(bottom: 6),
-      child: Material(
-        color: _kSurface,
-        borderRadius: BorderRadius.circular(14),
-        child: InkWell(
+      padding: const EdgeInsets.only(bottom: 8),
+      child: AnimatedContainer(
+        duration: const Duration(milliseconds: 200),
+        decoration: BoxDecoration(
+          color: isSelected ? accentColor.withAlpha(20) : AppTheme.kSurface,
           borderRadius: BorderRadius.circular(14),
-          onTap: onTap,
-          child: Padding(
-            padding:
-                const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
-            child: Row(
-              children: [
-                Container(
-                  width: 40,
-                  height: 40,
-                  decoration: BoxDecoration(
-                    borderRadius: BorderRadius.circular(10),
-                    color: accentColor.withAlpha(25),
+          border: Border.all(
+            color: isSelected ? accentColor : Colors.transparent,
+            width: 1.5,
+          ),
+        ),
+        child: Material(
+          color: Colors.transparent,
+          child: InkWell(
+            borderRadius: BorderRadius.circular(14),
+            onTap: onTap,
+            child: Padding(
+              padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
+              child: Row(
+                children: [
+                  Container(
+                    width: 40,
+                    height: 40,
+                    decoration: BoxDecoration(
+                      borderRadius: BorderRadius.circular(10),
+                      color: accentColor.withAlpha(25),
+                    ),
+                    child: Icon(icon, color: accentColor, size: 20),
                   ),
-                  child: Icon(icon, color: accentColor, size: 20),
-                ),
-                const SizedBox(width: 14),
-                Expanded(
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Text(
-                        stream.label,
-                        style: const TextStyle(
-                          color: Colors.white,
-                          fontSize: 14,
-                          fontWeight: FontWeight.w600,
-                        ),
-                      ),
-                      if (stream.formattedSize.isNotEmpty)
-                        Padding(
-                          padding: const EdgeInsets.only(top: 2),
-                          child: Text(
-                            stream.formattedSize,
-                            style: const TextStyle(
-                                color: _kTextDim, fontSize: 12),
+                  const SizedBox(width: 14),
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(
+                          customLabel ?? stream.label,
+                          style: TextStyle(
+                            color: isSelected ? Colors.white : Colors.white.withAlpha(220),
+                            fontSize: 14,
+                            fontWeight: isSelected ? FontWeight.w700 : FontWeight.w600,
                           ),
                         ),
-                    ],
+                        if (stream.formattedSize.isNotEmpty)
+                          Padding(
+                            padding: const EdgeInsets.only(top: 2),
+                            child: Text(
+                              stream.formattedSize,
+                              style: const TextStyle(
+                                  color: AppTheme.kTextDim, fontSize: 12),
+                            ),
+                          ),
+                      ],
+                    ),
                   ),
-                ),
-                Icon(Icons.download_rounded,
-                    color: accentColor.withAlpha(160), size: 22),
-              ],
+                  if (isSelected)
+                    Icon(Icons.check_circle_rounded, color: accentColor, size: 22)
+                  else
+                    const SizedBox(width: 22),
+                ],
+              ),
             ),
           ),
         ),

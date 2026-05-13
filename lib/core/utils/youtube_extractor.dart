@@ -17,12 +17,32 @@ class StreamOption {
   /// File size in bytes (may be approximate or null).
   final int? sizeBytes;
 
+  /// Video author
+  final String? author;
+
+  /// Video thumbnail URL
+  final String? thumbnailUrl;
+
+  /// Video duration
+  final Duration? duration;
+
+  /// Format
+  final String format;
+
+  /// Quality string (e.g. 1080p, 320kbps)
+  final String quality;
+
   const StreamOption({
     required this.label,
     required this.url,
     required this.title,
     this.isAudioOnly = false,
     this.sizeBytes,
+    this.author,
+    this.thumbnailUrl,
+    this.duration,
+    required this.format,
+    required this.quality,
   });
 
   /// Returns a human-readable file size string.
@@ -66,6 +86,9 @@ class YouTubeExtractor {
     final video = await _yt.videos.get(url);
     final manifest = await _yt.videos.streamsClient.getManifest(video.id);
     final title = video.title;
+    final author = video.author;
+    final duration = video.duration;
+    final thumbnailUrl = video.thumbnails.highResUrl;
 
     final options = <StreamOption>[];
 
@@ -82,6 +105,11 @@ class YouTubeExtractor {
         url: s.url.toString(),
         title: title,
         sizeBytes: s.size.totalBytes,
+        author: author,
+        duration: duration,
+        thumbnailUrl: thumbnailUrl,
+        format: s.container.name,
+        quality: quality,
       ));
     }
 
@@ -91,12 +119,18 @@ class YouTubeExtractor {
 
     for (final s in audioOnly) {
       final kbps = (s.bitrate.bitsPerSecond / 1000).round();
+      final quality = '${kbps}kbps';
       options.add(StreamOption(
-        label: '${kbps}kbps • ${s.container.name} (audio)',
+        label: '$quality • ${s.container.name} (audio)',
         url: s.url.toString(),
         title: title,
         isAudioOnly: true,
         sizeBytes: s.size.totalBytes,
+        author: author,
+        duration: duration,
+        thumbnailUrl: thumbnailUrl,
+        format: s.container.name,
+        quality: quality,
       ));
     }
 

@@ -1,8 +1,66 @@
+import 'dart:convert';
 import 'dart:io';
 
 import 'package:path_provider/path_provider.dart';
 
-/// Metadata for a single downloaded file.
+/// The schema for the JSON sidecar metadata.
+class DownloadMetadata {
+  final String title;
+  final String? thumbnailUrl;
+  final String? author;
+  final Duration? duration;
+  final String sourceUrl;
+  final DateTime downloadedAt;
+  final int fileSizeBytes;
+  final String format;
+  final String quality;
+
+  const DownloadMetadata({
+    required this.title,
+    this.thumbnailUrl,
+    this.author,
+    this.duration,
+    required this.sourceUrl,
+    required this.downloadedAt,
+    required this.fileSizeBytes,
+    required this.format,
+    required this.quality,
+  });
+
+  Map<String, dynamic> toJson() {
+    return {
+      'title': title,
+      'thumbnailUrl': thumbnailUrl,
+      'author': author,
+      'durationMs': duration?.inMilliseconds,
+      'sourceUrl': sourceUrl,
+      'downloadedAt': downloadedAt.toIso8601String(),
+      'fileSizeBytes': fileSizeBytes,
+      'format': format,
+      'quality': quality,
+    };
+  }
+
+  factory DownloadMetadata.fromJson(Map<String, dynamic> json) {
+    return DownloadMetadata(
+      title: json['title'] ?? '',
+      thumbnailUrl: json['thumbnailUrl'],
+      author: json['author'],
+      duration: json['durationMs'] != null
+          ? Duration(milliseconds: json['durationMs'])
+          : null,
+      sourceUrl: json['sourceUrl'] ?? '',
+      downloadedAt: json['downloadedAt'] != null
+          ? DateTime.tryParse(json['downloadedAt']) ?? DateTime.now()
+          : DateTime.now(),
+      fileSizeBytes: json['fileSizeBytes'] ?? 0,
+      format: json['format'] ?? '',
+      quality: json['quality'] ?? '',
+    );
+  }
+}
+
+/// Information combining the file and its metadata.
 class DownloadedFileInfo {
   /// Absolute path to the file.
   final String path;
@@ -19,12 +77,16 @@ class DownloadedFileInfo {
   /// Last-modified timestamp (used as "download date").
   final DateTime modified;
 
+  /// Associated metadata from the JSON sidecar, if any.
+  final DownloadMetadata? metadata;
+
   const DownloadedFileInfo({
     required this.path,
     required this.name,
     required this.extension,
     required this.sizeBytes,
     required this.modified,
+    this.metadata,
   });
 
   // ── File-type helpers ──────────────────────────────────────
@@ -37,7 +99,24 @@ class DownloadedFileInfo {
       const ['mp3', 'aac', 'ogg', 'wav', 'flac', 'wma', 'm4a', 'opus']
           .contains(extension);
 
-  // ── Formatted size ─────────────────────────────────────────
+  // ── Display helpers ────────────────────────────────────────
+
+  String get displayTitle {
+    if (metadata != null && metadata!.title.isNotEmpty) {
+      return metadata!.title;
+    }
+    return name;
+  }
+
+  String get displayAuthor => metadata?.author ?? 'Unknown Author';
+
+  String? get displayDuration {
+    final d = metadata?.duration;
+    if (d == null) return null;
+    final min = d.inMinutes;
+    final sec = (d.inSeconds % 60).toString().padLeft(2, '0');
+    return '$min:$sec';
+  }
 
   String get formattedSize {
     if (sizeBytes < 1024) return '$sizeBytes B';
@@ -46,8 +125,6 @@ class DownloadedFileInfo {
     }
     return '${(sizeBytes / (1024 * 1024)).toStringAsFixed(1)} MB';
   }
-
-  // ── Formatted date ─────────────────────────────────────────
 
   String get formattedDate {
     final now = DateTime.now();
@@ -73,7 +150,12 @@ class FileManager {
   /// Returns the absolute path to the downloads directory.
   static Future<String> get downloadsPath async {
     final dir = await getApplicationDocumentsDirectory();
-    return '${dir.path}/$_folderName';
+    final path = '${dir.path}/$_folderName';
+    final directory = Directory(path);
+    if (!directory.existsSync()) {
+      directory.createSync(recursive: true);
+    }
+    return path;
   }
 
   /// Scans the downloads directory and returns [DownloadedFileInfo]
@@ -92,10 +174,27 @@ class FileManager {
     final files = <DownloadedFileInfo>[];
 
     for (final file in entities) {
-      final stat = file.statSync();
       final name = file.path.split(Platform.pathSeparator).last;
+      
+      // Skip JSON sidecars
+      if (name.endsWith('.json')) continue;
+
+      final stat = file.statSync();
       final dot = name.lastIndexOf('.');
       final ext = dot != -1 ? name.substring(dot + 1).toLowerCase() : '';
+
+      // Try to read metadata
+      DownloadMetadata? metadata;
+      final jsonFile = File('${file.path}.json');
+      if (jsonFile.existsSync()) {
+        try {
+          final content = jsonFile.readAsStringSync();
+          final jsonMap = jsonDecode(content) as Map<String, dynamic>;
+          metadata = DownloadMetadata.fromJson(jsonMap);
+        } catch (_) {
+          // ignore parsing errors
+        }
+      }
 
       files.add(DownloadedFileInfo(
         path: file.path,
@@ -103,6 +202,7 @@ class FileManager {
         extension: ext,
         sizeBytes: stat.size,
         modified: stat.modified,
+        metadata: metadata,
       ));
     }
 
@@ -112,12 +212,24 @@ class FileManager {
     return files;
   }
 
-  /// Deletes the file at [path]. Returns `true` on success.
+  /// Saves metadata to a sidecar JSON file next to the main file.
+  static Future<void> saveMetadata(String filePath, DownloadMetadata metadata) async {
+    try {
+      final file = File('$filePath.json');
+      await file.writeAsString(jsonEncode(metadata.toJson()));
+    } catch (_) {}
+  }
+
+  /// Deletes the file at [path] and its metadata sidecar if present.
   static Future<bool> deleteFile(String path) async {
     try {
       final file = File(path);
       if (await file.exists()) {
         await file.delete();
+        final jsonFile = File('$path.json');
+        if (await jsonFile.exists()) {
+          await jsonFile.delete();
+        }
         return true;
       }
     } catch (_) {}

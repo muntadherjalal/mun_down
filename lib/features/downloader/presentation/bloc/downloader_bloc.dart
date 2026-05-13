@@ -8,6 +8,7 @@ import 'package:flutter_bloc/flutter_bloc.dart';
 import '../../../../core/network/network_info.dart';
 import '../../domain/entities/download_entity.dart';
 import '../../domain/repositories/downloader_repository.dart';
+import '../../../../core/utils/file_manager.dart';
 
 part 'downloader_event.dart';
 part 'downloader_state.dart';
@@ -67,7 +68,7 @@ class DownloaderBloc extends Bloc<DownloaderEvent, DownloaderState> {
     await emit.forEach<DownloadEntity>(
       _repository.startDownload(
         event.url,
-        title: event.title,
+        metadata: event.metadata,
         cancelToken: _cancelToken,
       ),
       onData: (entity) => _mapEntityToState(entity),
