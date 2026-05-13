@@ -1,7 +1,7 @@
 name: mun_down
 description: "A scalable Video & Audio Downloader app."
 publish_to: 'none'
-version: 0.1.0+1
+version: 1.5.0+1
 
 environment:
   sdk: ^3.11.1
@@ -45,6 +45,7 @@ dependencies:
   local_auth: ^2.3.0
   connectivity_plus: ^6.1.1
   shared_preferences: ^2.3.5
+  audio_session: ^0.2.3
 
 dev_dependencies:
   flutter_test:
@@ -54,5 +55,17 @@ dev_dependencies:
   # Code Generation
   build_runner: ^2.4.15
 
+  # App Icon Generation
+  flutter_launcher_icons: ^0.14.3
+
+flutter_launcher_icons:
+  android: true
+  ios: true
+  image_path: "assets/icon/app_icon.jpeg"
+  adaptive_icon_background: "#141422"
+  adaptive_icon_foreground: "assets/icon/app_icon.jpeg"
+
 flutter:
   uses-material-design: true
+  assets:
+    - assets/icon/

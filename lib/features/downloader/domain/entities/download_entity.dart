@@ -71,15 +71,66 @@ class DownloadEntity extends Equatable {
 
   @override
   List<Object?> get props => [
-        id,
-        originalUrl,
-        title,
-        progress,
-        savePath,
-        status,
-        isPrivate,
-        totalBytes,
-        receivedBytes,
-        thumbnailUrl,
-      ];
+    id,
+    originalUrl,
+    title,
+    progress,
+    savePath,
+    status,
+    isPrivate,
+    totalBytes,
+    receivedBytes,
+    thumbnailUrl,
+  ];
+}
+
+class DownloadMetadata {
+  final String title;
+  final String? thumbnailUrl;
+  final String? author;
+  final Duration? duration;
+  final String sourceUrl;
+  final DateTime downloadedAt;
+  final int fileSizeBytes;
+  final String format;
+  final String quality;
+
+  DownloadMetadata({
+    required this.title,
+    this.thumbnailUrl,
+    required this.author,
+    this.duration,
+    required this.sourceUrl,
+    required this.downloadedAt,
+    required this.fileSizeBytes,
+    required this.format,
+    required this.quality,
+  });
+
+  Map<String, dynamic> toJson() => {
+    'title': title,
+    'thumbnailUrl': thumbnailUrl,
+    'author': author,
+    'duration': duration?.inSeconds,
+    'sourceUrl': sourceUrl,
+    'downloadedAt': downloadedAt.toIso8601String(),
+    'fileSizeBytes': fileSizeBytes,
+    'format': format,
+    'quality': quality,
+  };
+
+  factory DownloadMetadata.fromJson(Map<String, dynamic> json) =>
+      DownloadMetadata(
+        title: json['title'],
+        thumbnailUrl: json['thumbnailUrl'],
+        author: json['author'],
+        duration: json['duration'] != null
+            ? Duration(seconds: json['duration'])
+            : null,
+        sourceUrl: json['sourceUrl'],
+        downloadedAt: DateTime.parse(json['downloadedAt']),
+        fileSizeBytes: json['fileSizeBytes'],
+        format: json['format'],
+        quality: json['quality'],
+      );
 }

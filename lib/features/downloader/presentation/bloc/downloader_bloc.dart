@@ -6,7 +6,6 @@ import 'package:equatable/equatable.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 
 import '../../../../core/network/network_info.dart';
-import '../../../../core/utils/file_manager.dart';
 import '../../domain/entities/download_entity.dart';
 import '../../domain/repositories/downloader_repository.dart';
 import '../../../files/presentation/pages/files_page.dart';
@@ -31,12 +30,15 @@ class DownloaderBloc extends Bloc<DownloaderEvent, DownloaderState> {
   String? _lastUrl;
   DownloadMetadata? _lastMetadata;
 
+  /// Stores the path to the partially downloaded file.
+  String? _lastSavePath;
+
   DownloaderBloc({
     required DownloaderRepository repository,
     required NetworkInfo networkInfo,
-  })  : _repository = repository,
-        _networkInfo = networkInfo,
-        super(const DownloaderInitialState()) {
+  }) : _repository = repository,
+       _networkInfo = networkInfo,
+       super(const DownloaderInitialState()) {
     on<StartDownloadEvent>(_onStartDownload);
     on<ResetDownloaderEvent>(_onReset);
     on<NetworkDroppedEvent>(_onNetworkDropped);
@@ -75,6 +77,10 @@ class DownloaderBloc extends Bloc<DownloaderEvent, DownloaderState> {
     _lastUrl = event.url;
     _lastMetadata = event.metadata;
 
+    // Clear last path if it's a completely new download,
+    // keep it if event.existingSavePath is passed (Resume).
+    _lastSavePath = event.existingSavePath;
+
     // `emit.forEach` automatically subscribes, forwards items, and
     // cancels the subscription if the BLoC is closed mid-download.
     await emit.forEach<DownloadEntity>(
@@ -82,32 +88,35 @@ class DownloaderBloc extends Bloc<DownloaderEvent, DownloaderState> {
         event.url,
         metadata: event.metadata,
         cancelToken: _cancelToken,
+        existingSavePath: _lastSavePath, // Pass the path to engine
       ),
       onData: (entity) {
         _lastEntity = entity;
+        _lastSavePath = entity.savePath.isNotEmpty
+            ? entity.savePath
+            : _lastSavePath;
+
         final mappedState = _mapEntityToState(entity);
 
         // Silent completion: notify Library to refresh without navigation.
         if (mappedState is DownloaderCompletedState) {
           FilesPage.refreshNotifier.value++;
+          _lastSavePath = null; // Clear path on success
         }
 
         return mappedState;
       },
-      onError: (error, _) =>
-          DownloaderFailedState(message: error.toString()),
+      onError: (error, _) => DownloaderFailedState(message: error.toString()),
     );
   }
 
-  void _onReset(
-    ResetDownloaderEvent event,
-    Emitter<DownloaderState> emit,
-  ) {
+  void _onReset(ResetDownloaderEvent event, Emitter<DownloaderState> emit) {
     _cancelToken?.cancel();
     _cancelToken = null;
     _lastEntity = null;
     _lastUrl = null;
     _lastMetadata = null;
+    _lastSavePath = null;
     emit(const DownloaderInitialState());
   }
 
@@ -116,15 +125,18 @@ class DownloaderBloc extends Bloc<DownloaderEvent, DownloaderState> {
     Emitter<DownloaderState> emit,
   ) {
     if (state is DownloaderProgressState || state is DownloaderFetchingState) {
-      emit(const DownloaderFailedState(
-          message: 'Internet connection lost. Download paused.'));
+      // Pause instead of failing so the file is kept
+      _cancelToken?.cancel();
+      _cancelToken = null;
+      if (_lastEntity != null) {
+        emit(DownloaderPausedState(entity: _lastEntity!));
+      } else {
+        emit(const DownloaderFailedState(message: 'Internet connection lost.'));
+      }
     }
   }
 
-  void _onPause(
-    PauseDownloadEvent event,
-    Emitter<DownloaderState> emit,
-  ) {
+  void _onPause(PauseDownloadEvent event, Emitter<DownloaderState> emit) {
     if (state is DownloaderProgressState) {
       _cancelToken?.cancel();
       _cancelToken = null;
@@ -139,10 +151,17 @@ class DownloaderBloc extends Bloc<DownloaderEvent, DownloaderState> {
     ResumeDownloadEvent event,
     Emitter<DownloaderState> emit,
   ) async {
-    // For now, resume restarts the download since Dio.download doesn't
-    // natively support range-based resume on all servers.
-    // The UX still gives the user pause/resume control.
-    if (_lastUrl != null) {
+    // REAL RESUME: Start download passing the existing file path.
+    if (_lastUrl != null && _lastSavePath != null) {
+      add(
+        StartDownloadEvent(
+          url: _lastUrl!,
+          metadata: _lastMetadata,
+          existingSavePath: _lastSavePath,
+        ),
+      );
+    } else if (_lastUrl != null) {
+      // Fallback if path is somehow lost
       add(StartDownloadEvent(url: _lastUrl!, metadata: _lastMetadata));
     }
   }
@@ -153,12 +172,14 @@ class DownloaderBloc extends Bloc<DownloaderEvent, DownloaderState> {
 
   DownloaderState _mapEntityToState(DownloadEntity entity) {
     return switch (entity.status) {
-      DownloadStatus.initial    => const DownloaderInitialState(),
-      DownloadStatus.fetching   => DownloaderFetchingState(entity: entity),
+      DownloadStatus.initial => const DownloaderInitialState(),
+      DownloadStatus.fetching => DownloaderFetchingState(entity: entity),
       DownloadStatus.downloading => DownloaderProgressState(entity: entity),
-      DownloadStatus.paused     => DownloaderPausedState(entity: entity),
-      DownloadStatus.completed  => DownloaderCompletedState(entity: entity),
-      DownloadStatus.failed     => const DownloaderFailedState(message: 'Download failed'),
+      DownloadStatus.paused => DownloaderPausedState(entity: entity),
+      DownloadStatus.completed => DownloaderCompletedState(entity: entity),
+      DownloadStatus.failed => const DownloaderFailedState(
+        message: 'Download failed',
+      ),
     };
   }
 }

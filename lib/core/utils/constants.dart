@@ -3,7 +3,7 @@ class AppConstants {
   AppConstants._();
 
   static const String appName = 'MunDown';
-  static const String appVersion = '1.0.0+1';
+  static const String appVersion = '1.5.0+1';
 
   // API
   static const String baseUrl = 'https://api.example.com';

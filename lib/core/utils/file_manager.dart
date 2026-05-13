@@ -3,62 +3,7 @@ import 'dart:io';
 
 import 'package:path_provider/path_provider.dart';
 
-/// The schema for the JSON sidecar metadata.
-class DownloadMetadata {
-  final String title;
-  final String? thumbnailUrl;
-  final String? author;
-  final Duration? duration;
-  final String sourceUrl;
-  final DateTime downloadedAt;
-  final int fileSizeBytes;
-  final String format;
-  final String quality;
-
-  const DownloadMetadata({
-    required this.title,
-    this.thumbnailUrl,
-    this.author,
-    this.duration,
-    required this.sourceUrl,
-    required this.downloadedAt,
-    required this.fileSizeBytes,
-    required this.format,
-    required this.quality,
-  });
-
-  Map<String, dynamic> toJson() {
-    return {
-      'title': title,
-      'thumbnailUrl': thumbnailUrl,
-      'author': author,
-      'durationMs': duration?.inMilliseconds,
-      'sourceUrl': sourceUrl,
-      'downloadedAt': downloadedAt.toIso8601String(),
-      'fileSizeBytes': fileSizeBytes,
-      'format': format,
-      'quality': quality,
-    };
-  }
-
-  factory DownloadMetadata.fromJson(Map<String, dynamic> json) {
-    return DownloadMetadata(
-      title: json['title'] ?? '',
-      thumbnailUrl: json['thumbnailUrl'],
-      author: json['author'],
-      duration: json['durationMs'] != null
-          ? Duration(milliseconds: json['durationMs'])
-          : null,
-      sourceUrl: json['sourceUrl'] ?? '',
-      downloadedAt: json['downloadedAt'] != null
-          ? DateTime.tryParse(json['downloadedAt']) ?? DateTime.now()
-          : DateTime.now(),
-      fileSizeBytes: json['fileSizeBytes'] ?? 0,
-      format: json['format'] ?? '',
-      quality: json['quality'] ?? '',
-    );
-  }
-}
+import '../../../features/downloader/domain/entities/download_entity.dart';
 
 /// Information combining the file and its metadata.
 class DownloadedFileInfo {
@@ -91,13 +36,26 @@ class DownloadedFileInfo {
 
   // ── File-type helpers ──────────────────────────────────────
 
-  bool get isVideo =>
-      const ['mp4', 'mkv', 'webm', 'avi', 'mov', 'flv', 'm4v']
-          .contains(extension);
+  bool get isVideo => const [
+    'mp4',
+    'mkv',
+    'webm',
+    'avi',
+    'mov',
+    'flv',
+    'm4v',
+  ].contains(extension);
 
-  bool get isAudio =>
-      const ['mp3', 'aac', 'ogg', 'wav', 'flac', 'wma', 'm4a', 'opus']
-          .contains(extension);
+  bool get isAudio => const [
+    'mp3',
+    'aac',
+    'ogg',
+    'wav',
+    'flac',
+    'wma',
+    'm4a',
+    'opus',
+  ].contains(extension);
 
   // ── Display helpers ────────────────────────────────────────
 
@@ -166,24 +124,19 @@ class FileManager {
 
     if (!dir.existsSync()) return [];
 
-    final entities = dir
-        .listSync()
-        .whereType<File>()
-        .toList();
+    final entities = dir.listSync().whereType<File>().toList();
 
     final files = <DownloadedFileInfo>[];
 
     for (final file in entities) {
       final name = file.path.split(Platform.pathSeparator).last;
-      
-      // Skip JSON sidecars
+
       if (name.endsWith('.json')) continue;
 
       final stat = file.statSync();
       final dot = name.lastIndexOf('.');
       final ext = dot != -1 ? name.substring(dot + 1).toLowerCase() : '';
 
-      // Try to read metadata
       DownloadMetadata? metadata;
       final jsonFile = File('${file.path}.json');
       if (jsonFile.existsSync()) {
@@ -191,29 +144,31 @@ class FileManager {
           final content = jsonFile.readAsStringSync();
           final jsonMap = jsonDecode(content) as Map<String, dynamic>;
           metadata = DownloadMetadata.fromJson(jsonMap);
-        } catch (_) {
-          // ignore parsing errors
-        }
+        } catch (_) {}
       }
 
-      files.add(DownloadedFileInfo(
-        path: file.path,
-        name: name,
-        extension: ext,
-        sizeBytes: stat.size,
-        modified: stat.modified,
-        metadata: metadata,
-      ));
+      files.add(
+        DownloadedFileInfo(
+          path: file.path,
+          name: name,
+          extension: ext,
+          sizeBytes: stat.size,
+          modified: stat.modified,
+          metadata: metadata,
+        ),
+      );
     }
 
-    // Newest first.
     files.sort((a, b) => b.modified.compareTo(a.modified));
 
     return files;
   }
 
   /// Saves metadata to a sidecar JSON file next to the main file.
-  static Future<void> saveMetadata(String filePath, DownloadMetadata metadata) async {
+  static Future<void> saveMetadata(
+    String filePath,
+    DownloadMetadata metadata,
+  ) async {
     try {
       final file = File('$filePath.json');
       await file.writeAsString(jsonEncode(metadata.toJson()));

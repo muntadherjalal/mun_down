@@ -5,9 +5,11 @@ import 'package:share_plus/share_plus.dart';
 import '../../../../core/themes/app_theme.dart';
 import '../../../../core/utils/biometric_helper.dart';
 import '../../../../core/utils/file_manager.dart';
-import '../widgets/media_player_sheet.dart';
+// غيرنا الاستيراد حتى يقرأ صفحة المشغل الأساسية
+import '../widgets/video_player_view.dart';
 
 enum LibraryFilter { all, video, audio }
+
 enum ViewMode { list, grid }
 
 /// Displays downloaded files with Share, Open, Lock, and Delete actions.
@@ -75,12 +77,16 @@ class FilesPageState extends State<FilesPage>
       reason: 'Authenticate to access "${file.displayTitle}"',
     );
     if (!ok && mounted) {
-      ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
-        backgroundColor: AppTheme.kSurface,
-        behavior: SnackBarBehavior.floating,
-        content: Text('Authentication failed',
-            style: TextStyle(color: AppTheme.kErrorRed, fontSize: 13)),
-      ));
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          backgroundColor: AppTheme.kSurface,
+          behavior: SnackBarBehavior.floating,
+          content: Text(
+            'Authentication failed',
+            style: TextStyle(color: AppTheme.kErrorRed, fontSize: 13),
+          ),
+        ),
+      );
     }
     return ok;
   }
@@ -92,12 +98,10 @@ class FilesPageState extends State<FilesPage>
 
     if (file.isVideo || file.isAudio) {
       if (!mounted) return;
-      showModalBottomSheet(
-        context: context,
-        isScrollControlled: true,
-        backgroundColor: Colors.transparent,
-        builder: (_) => MediaPlayerSheet(file: file),
-      );
+      // 🚀 هنا التعديل السحري: نفتح الفيديو بشاشة كاملة (صفحة جديدة)
+      Navigator.of(
+        context,
+      ).push(MaterialPageRoute(builder: (_) => VideoPlayerView(file: file)));
     } else {
       await OpenFilex.open(file.path);
     }
@@ -118,34 +122,38 @@ class FilesPageState extends State<FilesPage>
     });
 
     final isNowLocked = _lockedFiles.contains(file.path);
-    ScaffoldMessenger.of(context).showSnackBar(SnackBar(
-      backgroundColor: AppTheme.kSurface,
-      behavior: SnackBarBehavior.floating,
-      duration: const Duration(seconds: 2),
-      content: Row(
-        children: [
-          Icon(
-            isNowLocked ? Icons.lock_rounded : Icons.lock_open_rounded,
-            color: isNowLocked ? const Color(0xFFFFA726) : AppTheme.neonCyan,
-            size: 18,
-          ),
-          const SizedBox(width: 10),
-          Expanded(
-            child: Text(
-              isNowLocked
-                  ? '${file.displayTitle} locked — biometric required'
-                  : '${file.displayTitle} unlocked',
-              style: TextStyle(
-                color: isNowLocked ? const Color(0xFFFFA726) : AppTheme.neonCyan,
-                fontSize: 13,
-              ),
-              maxLines: 1,
-              overflow: TextOverflow.ellipsis,
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        backgroundColor: AppTheme.kSurface,
+        behavior: SnackBarBehavior.floating,
+        duration: const Duration(seconds: 2),
+        content: Row(
+          children: [
+            Icon(
+              isNowLocked ? Icons.lock_rounded : Icons.lock_open_rounded,
+              color: isNowLocked ? const Color(0xFFFFA726) : AppTheme.neonCyan,
+              size: 18,
             ),
-          ),
-        ],
+            const SizedBox(width: 10),
+            Expanded(
+              child: Text(
+                isNowLocked
+                    ? '${file.displayTitle} locked — biometric required'
+                    : '${file.displayTitle} unlocked',
+                style: TextStyle(
+                  color: isNowLocked
+                      ? const Color(0xFFFFA726)
+                      : AppTheme.neonCyan,
+                  fontSize: 13,
+                ),
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+              ),
+            ),
+          ],
+        ),
       ),
-    ));
+    );
   }
 
   Future<void> _deleteFile(DownloadedFileInfo file) async {
@@ -154,12 +162,16 @@ class FilesPageState extends State<FilesPage>
       final ok = await FileManager.deleteFile(file.path);
       if (ok && mounted) {
         _lockedFiles.remove(file.path);
-        ScaffoldMessenger.of(context).showSnackBar(SnackBar(
-          backgroundColor: AppTheme.kSurface,
-          content: Text('${file.displayTitle} deleted',
-              style: const TextStyle(color: AppTheme.neonCyan, fontSize: 13)),
-          behavior: SnackBarBehavior.floating,
-        ));
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            backgroundColor: AppTheme.kSurface,
+            content: Text(
+              '${file.displayTitle} deleted',
+              style: const TextStyle(color: AppTheme.neonCyan, fontSize: 13),
+            ),
+            behavior: SnackBarBehavior.floating,
+          ),
+        );
         _loadFiles();
       }
     }
@@ -171,33 +183,48 @@ class FilesPageState extends State<FilesPage>
       builder: (_) => AlertDialog(
         backgroundColor: AppTheme.kDeepBg,
         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
-        title: Row(children: [
-          Container(
-            width: 36,
-            height: 36,
-            decoration: BoxDecoration(
+        title: Row(
+          children: [
+            Container(
+              width: 36,
+              height: 36,
+              decoration: BoxDecoration(
                 shape: BoxShape.circle,
-                color: AppTheme.kErrorRed.withAlpha(25)),
-            child: const Icon(Icons.delete_rounded,
-                color: AppTheme.kErrorRed, size: 20),
-          ),
-          const SizedBox(width: 12),
-          const Text('Delete File',
+                color: AppTheme.kErrorRed.withAlpha(25),
+              ),
+              child: const Icon(
+                Icons.delete_rounded,
+                color: AppTheme.kErrorRed,
+                size: 20,
+              ),
+            ),
+            const SizedBox(width: 12),
+            const Text(
+              'Delete File',
               style: TextStyle(
-                  color: Colors.white,
-                  fontSize: 17,
-                  fontWeight: FontWeight.w700)),
-        ]),
+                color: Colors.white,
+                fontSize: 17,
+                fontWeight: FontWeight.w700,
+              ),
+            ),
+          ],
+        ),
         content: RichText(
           text: TextSpan(
             style: const TextStyle(
-                color: AppTheme.kTextDim, fontSize: 14, height: 1.4),
+              color: AppTheme.kTextDim,
+              fontSize: 14,
+              height: 1.4,
+            ),
             children: [
               const TextSpan(text: 'Are you sure you want to delete '),
               TextSpan(
-                  text: name,
-                  style: const TextStyle(
-                      color: Colors.white, fontWeight: FontWeight.w600)),
+                text: name,
+                style: const TextStyle(
+                  color: Colors.white,
+                  fontWeight: FontWeight.w600,
+                ),
+              ),
               const TextSpan(text: '? This action cannot be undone.'),
             ],
           ),
@@ -206,8 +233,10 @@ class FilesPageState extends State<FilesPage>
         actions: [
           TextButton(
             onPressed: () => Navigator.pop(context, false),
-            child: const Text('Cancel',
-                style: TextStyle(color: AppTheme.kTextDim)),
+            child: const Text(
+              'Cancel',
+              style: TextStyle(color: AppTheme.kTextDim),
+            ),
           ),
           ElevatedButton.icon(
             onPressed: () => Navigator.pop(context, true),
@@ -217,7 +246,8 @@ class FilesPageState extends State<FilesPage>
               backgroundColor: AppTheme.kErrorRed,
               foregroundColor: Colors.white,
               shape: RoundedRectangleBorder(
-                  borderRadius: BorderRadius.circular(10)),
+                borderRadius: BorderRadius.circular(10),
+              ),
               padding: const EdgeInsets.symmetric(horizontal: 18, vertical: 10),
             ),
           ),
@@ -250,10 +280,13 @@ class FilesPageState extends State<FilesPage>
             Expanded(
               child: _loading
                   ? const Center(
-                      child: CircularProgressIndicator(color: AppTheme.neonCyan))
+                      child: CircularProgressIndicator(
+                        color: AppTheme.neonCyan,
+                      ),
+                    )
                   : displayedFiles.isEmpty
-                      ? _buildEmpty()
-                      : _buildFileList(displayedFiles),
+                  ? _buildEmpty()
+                  : _buildFileList(displayedFiles),
             ),
           ],
         ),
@@ -271,32 +304,43 @@ class FilesPageState extends State<FilesPage>
             shaderCallback: (rect) => const LinearGradient(
               colors: [AppTheme.neonPurple, AppTheme.neonCyan],
             ).createShader(rect),
-            child: const Icon(Icons.video_library_rounded,
-                color: Colors.white, size: 26),
+            child: const Icon(
+              Icons.video_library_rounded,
+              color: Colors.white,
+              size: 26,
+            ),
           ),
           const SizedBox(width: 10),
           Expanded(
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                const Text('My Library',
-                    style: TextStyle(
-                        color: Colors.white,
-                        fontSize: 22,
-                        fontWeight: FontWeight.w700)),
+                const Text(
+                  'My Library',
+                  style: TextStyle(
+                    color: Colors.white,
+                    fontSize: 22,
+                    fontWeight: FontWeight.w700,
+                  ),
+                ),
                 if (!_loading)
                   Text(
                     '${_files.length} file${_files.length == 1 ? '' : 's'}'
                     '${_lockedFiles.isNotEmpty ? ' • ${_lockedFiles.length} locked' : ''}',
                     style: const TextStyle(
-                        color: AppTheme.kTextDim, fontSize: 12),
+                      color: AppTheme.kTextDim,
+                      fontSize: 12,
+                    ),
                   ),
               ],
             ),
           ),
           IconButton(
-            icon: const Icon(Icons.refresh_rounded,
-                color: Colors.white70, size: 22),
+            icon: const Icon(
+              Icons.refresh_rounded,
+              color: Colors.white70,
+              size: 22,
+            ),
             onPressed: _loadFiles,
             tooltip: 'Refresh',
           ),
@@ -344,7 +388,9 @@ class FilesPageState extends State<FilesPage>
       child: Container(
         padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
         decoration: BoxDecoration(
-          color: isSelected ? AppTheme.neonCyan.withAlpha(25) : Colors.transparent,
+          color: isSelected
+              ? AppTheme.neonCyan.withAlpha(25)
+              : Colors.transparent,
           border: Border.all(
             color: isSelected ? AppTheme.neonCyan : Colors.white24,
           ),
@@ -391,21 +437,29 @@ class FilesPageState extends State<FilesPage>
             width: 80,
             height: 80,
             decoration: BoxDecoration(
-                shape: BoxShape.circle,
-                color: AppTheme.neonCyan.withAlpha(12)),
-            child: Icon(Icons.video_library_rounded,
-                size: 40, color: AppTheme.neonCyan.withAlpha(70)),
+              shape: BoxShape.circle,
+              color: AppTheme.neonCyan.withAlpha(12),
+            ),
+            child: Icon(
+              Icons.video_library_rounded,
+              size: 40,
+              color: AppTheme.neonCyan.withAlpha(70),
+            ),
           ),
           const SizedBox(height: 20),
-          Text('Your Library is empty',
-              style: TextStyle(
-                  color: Colors.white.withAlpha(140),
-                  fontSize: 17,
-                  fontWeight: FontWeight.w600)),
+          Text(
+            'Your Library is empty',
+            style: TextStyle(
+              color: Colors.white.withAlpha(140),
+              fontSize: 17,
+              fontWeight: FontWeight.w600,
+            ),
+          ),
           const SizedBox(height: 6),
-          Text('Downloaded media will appear here.',
-              style: TextStyle(
-                  color: Colors.white.withAlpha(70), fontSize: 13)),
+          Text(
+            'Downloaded media will appear here.',
+            style: TextStyle(color: Colors.white.withAlpha(70), fontSize: 13),
+          ),
         ],
       ),
     );
@@ -486,18 +540,18 @@ class _FileListCard extends StatelessWidget {
     final accentColor = isLocked
         ? const Color(0xFFFFA726)
         : file.isVideo
-            ? AppTheme.neonPurple
-            : file.isAudio
-                ? AppTheme.neonCyan
-                : const Color(0xFFFFA726);
+        ? AppTheme.neonPurple
+        : file.isAudio
+        ? AppTheme.neonCyan
+        : const Color(0xFFFFA726);
 
     final iconData = isLocked
         ? Icons.lock_rounded
         : file.isVideo
-            ? Icons.videocam_rounded
-            : file.isAudio
-                ? Icons.audiotrack_rounded
-                : Icons.insert_drive_file_rounded;
+        ? Icons.videocam_rounded
+        : file.isAudio
+        ? Icons.audiotrack_rounded
+        : Icons.insert_drive_file_rounded;
 
     return Container(
       decoration: BoxDecoration(
@@ -525,14 +579,15 @@ class _FileListCard extends StatelessWidget {
                       end: Alignment.bottomRight,
                       colors: [
                         accentColor.withAlpha(50),
-                        accentColor.withAlpha(18)
+                        accentColor.withAlpha(18),
                       ],
                     ),
                     boxShadow: isLocked
                         ? [
                             BoxShadow(
-                                color: const Color(0xFFFFA726).withAlpha(30),
-                                blurRadius: 10)
+                              color: const Color(0xFFFFA726).withAlpha(30),
+                              blurRadius: 10,
+                            ),
                           ]
                         : [],
                   ),
@@ -554,44 +609,56 @@ class _FileListCard extends StatelessWidget {
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
-                      Text(file.displayTitle,
-                          style: const TextStyle(
-                              color: Colors.white,
-                              fontSize: 14,
-                              fontWeight: FontWeight.w600),
-                          maxLines: 1,
-                          overflow: TextOverflow.ellipsis),
+                      Text(
+                        file.displayTitle,
+                        style: const TextStyle(
+                          color: Colors.white,
+                          fontSize: 14,
+                          fontWeight: FontWeight.w600,
+                        ),
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                      ),
                       if (file.displayAuthor != 'Unknown Author')
                         Padding(
                           padding: const EdgeInsets.only(top: 2, bottom: 2),
-                          child: Text(file.displayAuthor,
-                              style: const TextStyle(
-                                  color: AppTheme.kTextDim, fontSize: 12),
-                              maxLines: 1,
-                              overflow: TextOverflow.ellipsis),
+                          child: Text(
+                            file.displayAuthor,
+                            style: const TextStyle(
+                              color: AppTheme.kTextDim,
+                              fontSize: 12,
+                            ),
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
+                          ),
                         ),
                       const SizedBox(height: 4),
                       Row(
                         children: [
                           _MetaChip(
-                              text: file.formattedSize, color: accentColor),
+                            text: file.formattedSize,
+                            color: accentColor,
+                          ),
                           const SizedBox(width: 8),
                           _MetaChip(
-                              text: file.extension.toUpperCase(),
-                              color: accentColor,
-                              outlined: true),
+                            text: file.extension.toUpperCase(),
+                            color: accentColor,
+                            outlined: true,
+                          ),
                           if (file.displayDuration != null) ...[
                             const SizedBox(width: 8),
                             _MetaChip(
-                                text: file.displayDuration!,
-                                color: Colors.white54),
+                              text: file.displayDuration!,
+                              color: Colors.white54,
+                            ),
                           ],
                           if (isLocked) ...[
                             const SizedBox(width: 8),
                             const _MetaChip(
-                                text: '🔒 VAULT',
-                                color: Color(0xFFFFA726),
-                                outlined: true),
+                              text: '🔒 VAULT',
+                              color: Color(0xFFFFA726),
+                              outlined: true,
+                            ),
                           ],
                         ],
                       ),
@@ -600,11 +667,15 @@ class _FileListCard extends StatelessWidget {
                 ),
                 // Action menu
                 PopupMenuButton<String>(
-                  icon: const Icon(Icons.more_vert_rounded,
-                      color: Colors.white54, size: 20),
+                  icon: const Icon(
+                    Icons.more_vert_rounded,
+                    color: Colors.white54,
+                    size: 20,
+                  ),
                   color: AppTheme.kSurface,
                   shape: RoundedRectangleBorder(
-                      borderRadius: BorderRadius.circular(12)),
+                    borderRadius: BorderRadius.circular(12),
+                  ),
                   onSelected: (value) {
                     if (value == 'play') onOpen();
                     if (value == 'share') onShare();
@@ -616,11 +687,16 @@ class _FileListCard extends StatelessWidget {
                       value: 'play',
                       child: Row(
                         children: [
-                          const Icon(Icons.play_arrow_rounded,
-                              color: AppTheme.neonCyan, size: 18),
+                          const Icon(
+                            Icons.play_arrow_rounded,
+                            color: AppTheme.neonCyan,
+                            size: 18,
+                          ),
                           const SizedBox(width: 10),
-                          Text(file.isVideo ? 'Play Video' : 'Play Audio',
-                              style: const TextStyle(color: Colors.white)),
+                          Text(
+                            file.isVideo ? 'Play Video' : 'Play Audio',
+                            style: const TextStyle(color: Colors.white),
+                          ),
                         ],
                       ),
                     ),
@@ -628,8 +704,11 @@ class _FileListCard extends StatelessWidget {
                       value: 'share',
                       child: const Row(
                         children: [
-                          Icon(Icons.share_rounded,
-                              color: AppTheme.neonPurple, size: 18),
+                          Icon(
+                            Icons.share_rounded,
+                            color: AppTheme.neonPurple,
+                            size: 18,
+                          ),
                           SizedBox(width: 10),
                           Text('Share', style: TextStyle(color: Colors.white)),
                         ],
@@ -640,13 +719,17 @@ class _FileListCard extends StatelessWidget {
                       child: Row(
                         children: [
                           Icon(
-                            isLocked ? Icons.lock_open_rounded : Icons.lock_rounded,
+                            isLocked
+                                ? Icons.lock_open_rounded
+                                : Icons.lock_rounded,
                             color: const Color(0xFFFFA726),
                             size: 18,
                           ),
                           const SizedBox(width: 10),
-                          Text(isLocked ? 'Unlock File' : 'Move to Vault',
-                              style: const TextStyle(color: Colors.white)),
+                          Text(
+                            isLocked ? 'Unlock File' : 'Move to Vault',
+                            style: const TextStyle(color: Colors.white),
+                          ),
                         ],
                       ),
                     ),
@@ -655,11 +738,16 @@ class _FileListCard extends StatelessWidget {
                       value: 'delete',
                       child: Row(
                         children: [
-                          Icon(Icons.delete_outline_rounded,
-                              color: AppTheme.kErrorRed.withAlpha(200), size: 18),
+                          Icon(
+                            Icons.delete_outline_rounded,
+                            color: AppTheme.kErrorRed.withAlpha(200),
+                            size: 18,
+                          ),
                           const SizedBox(width: 10),
-                          const Text('Delete',
-                              style: TextStyle(color: AppTheme.kErrorRed)),
+                          const Text(
+                            'Delete',
+                            style: TextStyle(color: AppTheme.kErrorRed),
+                          ),
                         ],
                       ),
                     ),
@@ -700,18 +788,18 @@ class _FileGridCard extends StatelessWidget {
     final accentColor = isLocked
         ? const Color(0xFFFFA726)
         : file.isVideo
-            ? AppTheme.neonPurple
-            : file.isAudio
-                ? AppTheme.neonCyan
-                : const Color(0xFFFFA726);
+        ? AppTheme.neonPurple
+        : file.isAudio
+        ? AppTheme.neonCyan
+        : const Color(0xFFFFA726);
 
     final iconData = isLocked
         ? Icons.lock_rounded
         : file.isVideo
-            ? Icons.videocam_rounded
-            : file.isAudio
-                ? Icons.audiotrack_rounded
-                : Icons.insert_drive_file_rounded;
+        ? Icons.videocam_rounded
+        : file.isAudio
+        ? Icons.audiotrack_rounded
+        : Icons.insert_drive_file_rounded;
 
     return Container(
       decoration: BoxDecoration(
@@ -731,19 +819,23 @@ class _FileGridCard extends StatelessWidget {
               Expanded(
                 child: Container(
                   decoration: BoxDecoration(
-                    borderRadius: const BorderRadius.vertical(top: Radius.circular(16)),
+                    borderRadius: const BorderRadius.vertical(
+                      top: Radius.circular(16),
+                    ),
                     gradient: LinearGradient(
                       begin: Alignment.topLeft,
                       end: Alignment.bottomRight,
                       colors: [
                         accentColor.withAlpha(30),
-                        accentColor.withAlpha(10)
+                        accentColor.withAlpha(10),
                       ],
                     ),
                   ),
                   child: file.metadata?.thumbnailUrl != null && !isLocked
                       ? ClipRRect(
-                          borderRadius: const BorderRadius.vertical(top: Radius.circular(16)),
+                          borderRadius: const BorderRadius.vertical(
+                            top: Radius.circular(16),
+                          ),
                           child: Image.network(
                             file.metadata!.thumbnailUrl!,
                             fit: BoxFit.cover,
@@ -760,20 +852,27 @@ class _FileGridCard extends StatelessWidget {
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    Text(file.displayTitle,
-                        style: const TextStyle(
-                            color: Colors.white,
-                            fontSize: 13,
-                            fontWeight: FontWeight.w600),
-                        maxLines: 2,
-                        overflow: TextOverflow.ellipsis),
+                    Text(
+                      file.displayTitle,
+                      style: const TextStyle(
+                        color: Colors.white,
+                        fontSize: 13,
+                        fontWeight: FontWeight.w600,
+                      ),
+                      maxLines: 2,
+                      overflow: TextOverflow.ellipsis,
+                    ),
                     const SizedBox(height: 6),
                     Row(
                       children: [
                         _MetaChip(text: file.formattedSize, color: accentColor),
                         const Spacer(),
                         if (isLocked)
-                          const Icon(Icons.lock_rounded, color: Color(0xFFFFA726), size: 14)
+                          const Icon(
+                            Icons.lock_rounded,
+                            color: Color(0xFFFFA726),
+                            size: 14,
+                          )
                         else
                           Icon(iconData, color: AppTheme.kTextDim, size: 14),
                       ],
@@ -811,12 +910,18 @@ class _MetaChip extends StatelessWidget {
       decoration: BoxDecoration(
         color: outlined ? Colors.transparent : color.withAlpha(18),
         borderRadius: BorderRadius.circular(4),
-        border:
-            outlined ? Border.all(color: color.withAlpha(60), width: 0.8) : null,
+        border: outlined
+            ? Border.all(color: color.withAlpha(60), width: 0.8)
+            : null,
       ),
-      child: Text(text,
-          style: TextStyle(
-              color: color, fontSize: 10, fontWeight: FontWeight.w600)),
+      child: Text(
+        text,
+        style: TextStyle(
+          color: color,
+          fontSize: 10,
+          fontWeight: FontWeight.w600,
+        ),
+      ),
     );
   }
 }

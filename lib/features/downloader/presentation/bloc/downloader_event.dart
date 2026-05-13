@@ -12,14 +12,21 @@ sealed class DownloaderEvent extends Equatable {
 final class StartDownloadEvent extends DownloaderEvent {
   /// The URL to download from.
   final String url;
-  
+
   /// Extracted metadata from the UI
   final DownloadMetadata? metadata;
 
-  const StartDownloadEvent({required this.url, this.metadata});
+  /// The path of the partially downloaded file (used for Resume)
+  final String? existingSavePath;
+
+  const StartDownloadEvent({
+    required this.url,
+    this.metadata,
+    this.existingSavePath,
+  });
 
   @override
-  List<Object?> get props => [url, metadata];
+  List<Object?> get props => [url, metadata, existingSavePath];
 }
 
 /// Fired to reset the BLoC back to its initial state

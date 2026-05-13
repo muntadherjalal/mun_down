@@ -11,5 +11,10 @@ abstract class DownloaderRepository {
   /// The stream emits an entity for every meaningful state change
   /// (metadata resolved, progress tick, completion, or failure).
   /// Consumers should listen until the stream closes.
-  Stream<DownloadEntity> startDownload(String url, {dynamic metadata, dynamic cancelToken});
+  Stream<DownloadEntity> startDownload(
+    String url, {
+    dynamic metadata,
+    dynamic cancelToken,
+    String? existingSavePath,
+  });
 }
