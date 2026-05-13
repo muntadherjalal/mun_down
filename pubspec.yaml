@@ -44,7 +44,7 @@ dependencies:
 
   # Biometric Auth
   local_auth: any
-  connectivity_plus: ^7.1.1
+  connectivity_plus: ^6.1.1
 
 dev_dependencies:
   flutter_test:
