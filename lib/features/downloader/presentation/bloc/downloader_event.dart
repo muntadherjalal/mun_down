@@ -24,3 +24,8 @@ final class StartDownloadEvent extends DownloaderEvent {
 final class ResetDownloaderEvent extends DownloaderEvent {
   const ResetDownloaderEvent();
 }
+
+/// Fired when network connectivity is lost.
+final class NetworkDroppedEvent extends DownloaderEvent {
+  const NetworkDroppedEvent();
+}

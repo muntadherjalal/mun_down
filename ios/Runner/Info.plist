@@ -26,6 +26,23 @@
 	<string>$(FLUTTER_BUILD_NUMBER)</string>
 	<key>LSRequiresIPhoneOS</key>
 	<true/>
+
+	<!-- ── File sharing & Documents access ──────────────── -->
+	<key>UIFileSharingEnabled</key>
+	<true/>
+	<key>LSSupportsOpeningDocumentsInPlace</key>
+	<true/>
+
+	<!-- ── Photo Library permissions ────────────────────── -->
+	<key>NSPhotoLibraryUsageDescription</key>
+	<string>MunDown needs access to your photo library to save downloaded media.</string>
+	<key>NSPhotoLibraryAddUsageDescription</key>
+	<string>MunDown needs permission to save downloaded videos and images to your photo library.</string>
+
+	<!-- ── Biometric authentication (FaceID) ─────────────── -->
+	<key>NSFaceIDUsageDescription</key>
+	<string>MunDown uses Face ID to protect your private vault files.</string>
+
 	<key>UIApplicationSceneManifest</key>
 	<dict>
 		<key>UIApplicationSupportsMultipleScenes</key>

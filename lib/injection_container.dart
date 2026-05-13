@@ -3,6 +3,7 @@ import 'package:get_it/get_it.dart';
 
 import 'core/network/network_info.dart';
 import 'core/utils/constants.dart';
+import 'core/utils/youtube_extractor.dart';
 import 'features/downloader/data/datasources/downloader_remote_data_source.dart';
 import 'features/downloader/data/repositories/downloader_repository_impl.dart';
 import 'features/downloader/domain/repositories/downloader_repository.dart';
@@ -28,9 +29,10 @@ Future<void> init() async {
       receiveTimeout:
           const Duration(milliseconds: AppConstants.receiveTimeout),
     ));
-    // Add interceptors here (logging, auth, retry…).
     return dio;
   });
+
+  sl.registerLazySingleton<YouTubeExtractor>(() => YouTubeExtractor());
 
   //──────────────────────────────────────────────────────────
   // Features — Downloader
@@ -46,20 +48,19 @@ Future<void> init() async {
     () => DownloaderRepositoryImpl(remoteDataSource: sl()),
   );
 
-  // BLoC — registered as Factory so a fresh instance is created each time
-  // it is requested (each screen gets its own BLoC lifecycle).
+  // BLoC
   sl.registerFactory<DownloaderBloc>(
-    () => DownloaderBloc(repository: sl()),
+    () => DownloaderBloc(
+      repository: sl(),
+      networkInfo: sl(),
+    ),
   );
 
   //──────────────────────────────────────────────────────────
   // Features — Downloads History
   //──────────────────────────────────────────────────────────
   // Data sources
-
   // Repositories
-
   // Use cases
-
   // BLoC
 }

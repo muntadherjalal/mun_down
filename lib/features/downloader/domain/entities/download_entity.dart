@@ -41,6 +41,9 @@ class DownloadEntity extends Equatable {
   /// Current lifecycle state.
   final DownloadStatus status;
 
+  /// Whether this file is locked in the private vault.
+  final bool isPrivate;
+
   const DownloadEntity({
     required this.id,
     required this.originalUrl,
@@ -48,6 +51,7 @@ class DownloadEntity extends Equatable {
     required this.progress,
     required this.savePath,
     required this.status,
+    this.isPrivate = false,
   });
 
   @override
@@ -58,5 +62,6 @@ class DownloadEntity extends Equatable {
         progress,
         savePath,
         status,
+        isPrivate,
       ];
 }

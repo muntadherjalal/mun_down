@@ -28,6 +28,24 @@ dependencies:
   path_provider: any
   permission_handler: any
 
+  # WebView
+  webview_flutter: ^4.13.0
+
+  # YouTube Media Extraction
+  youtube_explode_dart: ^2.3.9
+
+  # File Actions
+  share_plus: any
+  open_filex: any
+
+  # Video Player
+  video_player: any
+  chewie: any
+
+  # Biometric Auth
+  local_auth: any
+  connectivity_plus: ^7.1.1
+
 dev_dependencies:
   flutter_test:
     sdk: flutter
