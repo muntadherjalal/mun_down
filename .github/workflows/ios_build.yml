@@ -44,7 +44,7 @@ jobs:
           retention-days: 7
 
   # ────────────────────────────────────────────────────────────
-  # 2. Job لبناء نسخة الأندرويد (Android)
+  # 2. Job لبناء نسخة الأندرويد (Android) - ملف واحد شامل
   # ────────────────────────────────────────────────────────────
   build-android:
     name: Build Android APK
@@ -68,12 +68,12 @@ jobs:
       - name: Install dependencies
         run: flutter pub get
 
-      - name: Build APK Release (Split per ABI)
-        run: flutter build apk --release --split-per-abi
+      - name: Build APK Release (Universal)
+        run: flutter build apk --release # شلنا الـ split حتى يطلع ملف واحد
 
-      - name: Upload Android APKs
+      - name: Upload Android APK
         uses: actions/upload-artifact@v4
         with:
-          name: MunDown-Android-APKs
-          path: build/app/outputs/flutter-apk/*.apk
+          name: MunDown-Android-APK
+          path: build/app/outputs/flutter-apk/app-release.apk # حددنا الملف الواحد الصافي
           retention-days: 7
