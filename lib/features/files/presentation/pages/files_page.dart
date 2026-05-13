@@ -117,7 +117,7 @@ class FilesPageState extends State<FilesPage>
 
   Future<void> _shareFile(DownloadedFileInfo file) async {
     if (!await _ensureUnlocked(file)) return;
-    await SharePlus.instance.share(ShareParams(files: [XFile(file.path)]));
+    await Share.shareXFiles([XFile(file.path)]);
   }
 
   void _toggleLock(DownloadedFileInfo file) {

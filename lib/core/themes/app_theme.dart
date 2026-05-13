@@ -1,17 +1,27 @@
 import 'package:flutter/material.dart';
 
-/// Centralized dark theme for the MunDown app.
 class AppTheme {
   AppTheme._();
 
-  // ── Palette ──────────────────────────────────────────────
-  static const Color _primaryColor = Color(0xFF6C5CE7);
-  static const Color _secondaryColor = Color(0xFF00CEC9);
-  static const Color _surfaceColor = Color(0xFF1E1E2C);
-  static const Color _backgroundColor = Color(0xFF141422);
-  static const Color _errorColor = Color(0xFFFF6B6B);
-  static const Color _onPrimary = Colors.white;
-  static const Color _onSurface = Color(0xFFE0E0E0);
+  // ── Named Color Constants (used by painters & widgets) ──
+  static const Color neonCyan   = Color(0xFF00CEC9);
+  static const Color neonPurple = Color(0xFF6C5CE7);
+  static const Color kNeonCyan   = neonCyan;     // alias for backward compat
+  static const Color kNeonPurple = neonPurple;   // alias for backward compat
+  static const Color kSurface   = Color(0xFF1E1E2C);
+  static const Color kDeepBg    = Color(0xFF141422);
+  static const Color kErrorRed  = Color(0xFFFF6B6B);
+  static const Color kTextDim   = Color(0x99E0E0E0);
+  static const Color kGlassWhite = Color(0x14FFFFFF);
+
+  // ── Private palette ─────────────────────────────────────
+  static const Color _primaryColor   = neonPurple;
+  static const Color _secondaryColor = neonCyan;
+  static const Color _surfaceColor   = kSurface;
+  static const Color _backgroundColor = kDeepBg;
+  static const Color _errorColor     = kErrorRed;
+  static const Color _onPrimary      = Colors.white;
+  static const Color _onSurface      = Color(0xFFE0E0E0);
 
   // ── Dark Theme ───────────────────────────────────────────
   static ThemeData get darkTheme {

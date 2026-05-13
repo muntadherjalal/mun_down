@@ -21,12 +21,11 @@ dependencies:
   get_it: ^8.0.3
 
   # Local Database
-  isar: ^3.1.0+1
-  isar_flutter_libs: ^3.1.0+1
+  # isar removed as it's not used yet
 
   # Path & Permissions
-  path_provider: any
-  permission_handler: any
+  path_provider: ^2.1.5
+  permission_handler: ^11.3.1
 
   # WebView
   webview_flutter: ^4.13.0
@@ -35,15 +34,15 @@ dependencies:
   youtube_explode_dart: ^2.3.9
 
   # File Actions
-  share_plus: any
-  open_filex: any
+  share_plus: ^10.1.4
+  open_filex: ^4.5.0
 
   # Video Player
-  video_player: any
-  chewie: any
+  video_player: ^2.9.3
+  chewie: ^1.8.5
 
   # Biometric Auth
-  local_auth: any
+  local_auth: ^2.3.0
   connectivity_plus: ^6.1.1
 
 dev_dependencies:

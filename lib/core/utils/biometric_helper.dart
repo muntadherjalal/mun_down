@@ -38,8 +38,11 @@ class BiometricHelper {
     try {
       return await _auth.authenticate(
         localizedReason: reason,
-        biometricOnly: false, // Allow PIN/pattern fallback
-        persistAcrossBackgrounding: true,
+        options: const AuthenticationOptions(
+          biometricOnly: false, // Allow PIN/pattern fallback
+          useErrorDialogs: true,
+          stickyAuth: true,
+        ),
       );
     } on PlatformException {
       return false;
