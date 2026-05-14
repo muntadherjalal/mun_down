@@ -8,6 +8,18 @@ import 'features/downloader/data/datasources/downloader_remote_data_source.dart'
 import 'features/downloader/data/repositories/downloader_repository_impl.dart';
 import 'features/downloader/domain/repositories/downloader_repository.dart';
 import 'features/downloader/presentation/bloc/downloader_bloc.dart';
+import 'features/files/data/datasources/files_local_data_source.dart';
+import 'features/files/data/repositories/files_repository_impl.dart';
+import 'features/files/domain/repositories/files_repository.dart';
+import 'features/files/domain/usecases/get_locked_files_usecase.dart';
+import 'features/files/domain/usecases/toggle_file_lock_usecase.dart';
+import 'features/files/presentation/bloc/bloc.dart';
+import 'features/downloads_history/data/datasources/datasources.dart';
+import 'features/downloads_history/data/repositories/repositories.dart';
+import 'features/downloads_history/domain/repositories/repositories.dart';
+import 'features/downloads_history/domain/usecases/usecases.dart';
+import 'features/downloads_history/presentation/bloc/bloc.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 
 /// Global service locator instance.
 final sl = GetIt.instance;
@@ -19,6 +31,9 @@ Future<void> init() async {
   //──────────────────────────────────────────────────────────
   // Core
   //──────────────────────────────────────────────────────────
+  final sharedPreferences = await SharedPreferences.getInstance();
+  sl.registerLazySingleton<SharedPreferences>(() => sharedPreferences);
+
   sl.registerLazySingleton<NetworkInfo>(() => NetworkInfoImpl());
 
   sl.registerLazySingleton<Dio>(() {
@@ -57,10 +72,55 @@ Future<void> init() async {
   );
 
   //──────────────────────────────────────────────────────────
-  // Features — Downloads History
+  // Features — Files
   //──────────────────────────────────────────────────────────
   // Data sources
+  sl.registerLazySingleton<FilesLocalDataSource>(
+    () => FilesLocalDataSourceImpl(sharedPreferences: sl()),
+  );
+
   // Repositories
+  sl.registerLazySingleton<FilesRepository>(
+    () => FilesRepositoryImpl(localDataSource: sl()),
+  );
+
   // Use cases
+  sl.registerLazySingleton(() => GetLockedFilesUseCase(sl()));
+  sl.registerLazySingleton(() => ToggleFileLockUseCase(sl()));
+
   // BLoC
+  sl.registerFactory(
+    () => FilesBloc(
+      getLockedFiles: sl(),
+      toggleFileLock: sl(),
+    ),
+  );
+
+  //──────────────────────────────────────────────────────────
+  // Features — Downloads History
+  //──────────────────────────────────────────────────────────
+
+  // Data sources
+  sl.registerLazySingleton<DownloadsHistoryLocalDataSource>(
+    () => DownloadsHistoryLocalDataSourceImpl(sharedPreferences: sl()),
+  );
+
+  // Repositories
+  sl.registerLazySingleton<DownloadsHistoryRepository>(
+    () => DownloadsHistoryRepositoryImpl(localDataSource: sl()),
+  );
+
+  // Use cases
+  sl.registerLazySingleton(() => GetDownloadsHistoryUseCase(sl()));
+  sl.registerLazySingleton(() => AddDownloadHistoryUseCase(sl()));
+  sl.registerLazySingleton(() => ClearDownloadsHistoryUseCase(sl()));
+
+  // BLoC
+  sl.registerFactory(
+    () => DownloadsHistoryBloc(
+      getHistoryUseCase: sl(),
+      addHistoryUseCase: sl(),
+      clearHistoryUseCase: sl(),
+    ),
+  );
 }

@@ -6,6 +6,7 @@ import '../../../../injection_container.dart' as di;
 import '../../../browser/presentation/pages/browser_page.dart';
 import '../../../downloader/presentation/bloc/downloader_bloc.dart';
 import '../../../downloader/presentation/pages/downloader_page.dart';
+import '../../../downloads_history/presentation/pages/pages.dart';
 import '../../../files/presentation/pages/files_page.dart';
 import '../../../settings/presentation/pages/settings_page.dart';
 
@@ -51,6 +52,7 @@ class _MainScaffoldState extends State<MainScaffold> {
             BrowserPage(onTabSwitch: _onTabTapped),
             const DownloaderPage(),
             const FilesPage(),
+            const DownloadsHistoryPage(),
             const SettingsPage(),
           ],
         ),
@@ -91,7 +93,8 @@ class _MainScaffoldState extends State<MainScaffold> {
                 },
               ),
               _TabItem(icon: Icons.video_library_rounded, label: 'Library', isSelected: _currentIndex == 2, onTap: () => _onTabTapped(2)),
-              _TabItem(icon: Icons.settings_rounded, label: 'Settings', isSelected: _currentIndex == 3, onTap: () => _onTabTapped(3)),
+              _TabItem(icon: Icons.history_rounded, label: 'History', isSelected: _currentIndex == 3, onTap: () => _onTabTapped(3)),
+              _TabItem(icon: Icons.settings_rounded, label: 'Settings', isSelected: _currentIndex == 4, onTap: () => _onTabTapped(4)),
             ],
           ),
         ),

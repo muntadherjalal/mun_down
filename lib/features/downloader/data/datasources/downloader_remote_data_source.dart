@@ -3,11 +3,13 @@ import 'dart:convert';
 import 'dart:io';
 
 import 'package:dio/dio.dart';
-import 'package:path_provider/path_provider.dart';
+import 'package:permission_handler/permission_handler.dart';
 
 import '../../../../core/errors/exceptions.dart';
+import '../../../../core/utils/file_manager.dart';
 import '../../domain/entities/download_entity.dart';
 import '../models/download_model.dart';
+import '../models/download_metadata_model.dart';
 
 /// Contract for the remote data source responsible for downloading files.
 abstract class DownloaderRemoteDataSource {
@@ -76,6 +78,21 @@ class DownloaderRemoteDataSourceImpl implements DownloaderRemoteDataSource {
           status: DownloadStatus.fetching,
         ),
       );
+
+      // Check permissions for Android
+      if (Platform.isAndroid) {
+        if (await Permission.manageExternalStorage.isGranted || await Permission.storage.isGranted) {
+          // Granted
+        } else {
+          var status = await Permission.manageExternalStorage.request();
+          if (!status.isGranted) {
+            status = await Permission.storage.request();
+          }
+          if (!status.isGranted) {
+            throw const ServerException(message: 'Storage permission denied');
+          }
+        }
+      }
 
       // Build file name from metadata or resolve from URL.
       final String fileName;
@@ -166,7 +183,7 @@ class DownloaderRemoteDataSourceImpl implements DownloaderRemoteDataSource {
       if (metadata is DownloadMetadata) {
         try {
           final file = File('$savePath.json');
-          await file.writeAsString(jsonEncode(metadata.toJson()));
+          await file.writeAsString(jsonEncode(DownloadMetadataModel.fromEntity(metadata).toJson()));
         } catch (_) {}
       }
 
@@ -298,15 +315,11 @@ class DownloaderRemoteDataSourceImpl implements DownloaderRemoteDataSource {
     return null;
   }
 
-  /// Returns the absolute save path inside the app's documents directory,
+  /// Returns the absolute save path,
   /// appending a numeric suffix to avoid overwriting existing files.
   Future<String> _buildSavePath(String fileName) async {
-    final dir = await getApplicationDocumentsDirectory();
-    final downloadsDir = Directory('${dir.path}/MunDown');
-
-    if (!downloadsDir.existsSync()) {
-      await downloadsDir.create(recursive: true);
-    }
+    final downloadsDirPath = await FileManager.downloadsPath;
+    final downloadsDir = Directory(downloadsDirPath);
 
     var file = File('${downloadsDir.path}/$fileName');
     var counter = 1;

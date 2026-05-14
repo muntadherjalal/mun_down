@@ -9,6 +9,7 @@ import '../../../../injection_container.dart' as di;
 
 import '../../../downloader/presentation/bloc/downloader_bloc.dart';
 import '../../../downloader/presentation/widgets/quality_bottom_sheet.dart';
+import '../widgets/widgets.dart';
 
 class BrowserPage extends StatefulWidget {
   final void Function(int) onTabSwitch;
@@ -272,7 +273,7 @@ class _BrowserPageState extends State<BrowserPage>
         bottom: false,
         child: Column(
           children: [
-            _buildBrandHeader(),
+            const BrowserBrandHeader(),
             if (_isLoading)
               ClipRRect(
                 child: LinearProgressIndicator(
@@ -288,422 +289,67 @@ class _BrowserPageState extends State<BrowserPage>
               child: Stack(
                 children: [
                   WebViewWidget(controller: _controller),
-                  if (isStartPage) _buildStartPage(),
+                  if (isStartPage)
+                    BrowserStartPage(
+                      urlBarController: _urlBarController,
+                      onNavigate: _navigateTo,
+                    ),
                   if (_isFetchingStreams)
-                    Positioned(
+                    const Positioned(
                       bottom: 24,
                       left: 0,
                       right: 0,
-                      child: Center(child: _buildFetchingPill()),
+                      child: Center(child: FetchingPill()),
                     ),
                 ],
               ),
             ),
-            _buildBottomBar(isStartPage),
-          ],
-        ),
-      ),
-    );
-  }
-
-  Widget _buildBrandHeader() {
-    return Container(
-      width: double.infinity,
-      padding: const EdgeInsets.symmetric(vertical: 14),
-      decoration: BoxDecoration(
-        color: AppTheme.kDeepBg,
-        border: Border(
-          bottom: BorderSide(color: Colors.white.withAlpha(10), width: 1),
-        ),
-      ),
-      child: Row(
-        mainAxisAlignment: MainAxisAlignment.center,
-        children: [
-          const Icon(
-            Icons.download_rounded,
-            color: AppTheme.neonCyan,
-            size: 22,
-          ),
-          const SizedBox(width: 8),
-          const Text(
-            'MunDown',
-            style: TextStyle(
-              color: Colors.white,
-              fontSize: 18,
-              fontWeight: FontWeight.w700,
-              letterSpacing: 0.5,
-            ),
-          ),
-        ],
-      ),
-    );
-  }
-
-  Widget _buildStartPage() {
-    return Container(
-      color: AppTheme.kDeepBg,
-      width: double.infinity,
-      height: double.infinity,
-      padding: const EdgeInsets.symmetric(horizontal: 24),
-      child: Column(
-        mainAxisAlignment: MainAxisAlignment.center,
-        children: [
-          const Text(
-            'What do you want to download?',
-            style: TextStyle(
-              color: Colors.white,
-              fontSize: 20,
-              fontWeight: FontWeight.w600,
-            ),
-          ),
-          const SizedBox(height: 24),
-          Container(
-            height: 56,
-            decoration: BoxDecoration(
-              color: AppTheme.kSurface,
-              borderRadius: BorderRadius.circular(16),
-              border: Border.all(color: AppTheme.neonCyan.withAlpha(80)),
-              boxShadow: [
-                BoxShadow(
-                  color: AppTheme.neonCyan.withAlpha(20),
-                  blurRadius: 24,
-                  offset: const Offset(0, 8),
-                ),
-              ],
-            ),
-            child: TextField(
-              controller: _urlBarController,
-              decoration: const InputDecoration(
-                hintText: 'Search or enter URL...',
-                hintStyle: TextStyle(color: AppTheme.kTextDim, fontSize: 15),
-                prefixIcon: Icon(
-                  Icons.search_rounded,
-                  color: AppTheme.neonCyan,
-                ),
-                border: InputBorder.none,
-                contentPadding: EdgeInsets.symmetric(
-                  horizontal: 20,
-                  vertical: 18,
-                ),
-              ),
-              style: const TextStyle(color: Colors.white, fontSize: 16),
-              textInputAction: TextInputAction.go,
-              onSubmitted: _navigateTo,
-            ),
-          ),
-          const SizedBox(height: 48),
-          Row(
-            mainAxisAlignment: MainAxisAlignment.spaceEvenly,
-            children: [
-              _ShortcutTile(
-                icon: Icons.play_circle_fill_rounded,
-                label: 'YouTube',
-                color: Colors.redAccent,
-                onTap: () => _navigateTo('https://m.youtube.com'),
-              ),
-              _ShortcutTile(
-                icon: Icons.music_note_rounded,
-                label: 'TikTok',
-                color: Colors.white,
-                onTap: () => _navigateTo('https://www.tiktok.com'),
-              ),
-            ],
-          ),
-          const SizedBox(height: 24),
-          Row(
-            mainAxisAlignment: MainAxisAlignment.spaceEvenly,
-            children: [
-              _ShortcutTile(
-                icon: Icons.camera_alt_rounded,
-                label: 'Instagram',
-                color: Colors.pinkAccent,
-                onTap: () => _navigateTo('https://www.instagram.com'),
-              ),
-              _ShortcutTile(
-                icon: Icons.cloud_rounded,
-                label: 'SoundCloud',
-                color: Colors.orangeAccent,
-                onTap: () => _navigateTo('https://m.soundcloud.com'),
-              ),
-            ],
-          ),
-          const SizedBox(height: 64),
-        ],
-      ),
-    );
-  }
-
-  Widget _buildFetchingPill() {
-    return Material(
-      color: Colors.transparent,
-      child: Container(
-        padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 12),
-        decoration: BoxDecoration(
-          color: AppTheme.kSurface.withAlpha(240),
-          borderRadius: BorderRadius.circular(30),
-          border: Border.all(color: AppTheme.neonCyan.withAlpha(50)),
-          boxShadow: const [
-            BoxShadow(
-              color: Colors.black45,
-              blurRadius: 10,
-              offset: Offset(0, 4),
-            ),
-          ],
-        ),
-        child: Row(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            const SizedBox(
-              width: 18,
-              height: 18,
-              child: CircularProgressIndicator(
-                strokeWidth: 2,
-                valueColor: AlwaysStoppedAnimation(AppTheme.neonCyan),
-              ),
-            ),
-            const SizedBox(width: 12),
-            const Text(
-              'Fetching qualities...',
-              style: TextStyle(
-                color: Colors.white,
-                fontSize: 14,
-                fontWeight: FontWeight.w500,
-              ),
-            ),
-          ],
-        ),
-      ),
-    );
-  }
-
-  Widget _buildBottomBar(bool isStartPage) {
-    return Container(
-      padding: EdgeInsets.only(
-        left: 8,
-        right: 8,
-        top: 8,
-        bottom: MediaQuery.of(context).padding.bottom + 8,
-      ),
-      decoration: BoxDecoration(
-        color: AppTheme.kSurface,
-        boxShadow: [
-          BoxShadow(
-            color: Colors.black.withAlpha(60),
-            blurRadius: 12,
-            offset: const Offset(0, -4),
-          ),
-        ],
-      ),
-      child: Column(
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          Row(
-            mainAxisAlignment: MainAxisAlignment.spaceEvenly,
-            children: [
-              _BottomNavIcon(
-                icon: Icons.arrow_back_ios_rounded,
-                label: 'Back',
-                onTap: () => _controller.goBack(),
-              ),
-              _BottomNavIcon(
-                icon: Icons.arrow_forward_ios_rounded,
-                label: 'Forward',
-                onTap: () => _controller.goForward(),
-              ),
-              _BottomNavIcon(
-                icon: Icons.home_rounded,
-                label: 'Home',
-                onTap: _loadStartPage,
-              ),
-              _BottomNavIcon(
-                icon: _isLoading ? Icons.close_rounded : Icons.refresh_rounded,
-                label: _isLoading ? 'Stop' : 'Reload',
-                onTap: () => _isLoading
-                    ? _controller.loadRequest(Uri.parse('about:blank'))
-                    : _controller.reload(),
-              ),
-              _BottomNavIcon(
-                icon: Icons.history_rounded,
-                label: 'History',
-                onTap: () {
-                  ScaffoldMessenger.of(context).showSnackBar(
-                    const SnackBar(
-                      backgroundColor: AppTheme.kSurface,
-                      behavior: SnackBarBehavior.floating,
-                      content: Text(
-                        'History logged successfully',
-                        style: TextStyle(
-                          color: AppTheme.neonCyan,
-                          fontSize: 13,
-                        ),
+            BrowserBottomBar(
+              isStartPage: isStartPage,
+              isLoading: _isLoading,
+              isFetchingStreams: _isFetchingStreams,
+              onBack: () => _controller.goBack(),
+              onForward: () => _controller.goForward(),
+              onHome: _loadStartPage,
+              onReload: () => _isLoading
+                  ? _controller.loadRequest(Uri.parse('about:blank'))
+                  : _controller.reload(),
+              onHistory: () {
+                ScaffoldMessenger.of(context).showSnackBar(
+                  const SnackBar(
+                    backgroundColor: AppTheme.kSurface,
+                    behavior: SnackBarBehavior.floating,
+                    content: Text(
+                      'History logged successfully',
+                      style: TextStyle(
+                        color: AppTheme.neonCyan,
+                        fontSize: 13,
                       ),
                     ),
-                  );
-                },
-              ),
-              _BottomNavIcon(
-                icon: Icons.bookmark_border_rounded,
-                label: 'Bookmarks',
-                onTap: () {
-                  ScaffoldMessenger.of(context).showSnackBar(
-                    const SnackBar(
-                      backgroundColor: AppTheme.kSurface,
-                      behavior: SnackBarBehavior.floating,
-                      content: Text(
-                        'Saved to Bookmarks!',
-                        style: TextStyle(
-                          color: AppTheme.neonPurple,
-                          fontSize: 13,
-                        ),
+                  ),
+                );
+              },
+              onBookmarks: () {
+                ScaffoldMessenger.of(context).showSnackBar(
+                  const SnackBar(
+                    backgroundColor: AppTheme.kSurface,
+                    behavior: SnackBarBehavior.floating,
+                    content: Text(
+                      'Saved to Bookmarks!',
+                      style: TextStyle(
+                        color: AppTheme.neonPurple,
+                        fontSize: 13,
                       ),
                     ),
-                  );
-                },
-              ),
-            ],
-          ),
-          const SizedBox(height: 8),
-          SizedBox(
-            width: double.infinity,
-            height: 46,
-            child: DecoratedBox(
-              decoration: BoxDecoration(
-                borderRadius: BorderRadius.circular(23),
-                gradient: isStartPage
-                    ? const LinearGradient(
-                        colors: [Color(0x1AFFFFFF), Color(0x1AFFFFFF)],
-                      )
-                    : const LinearGradient(
-                        colors: [AppTheme.neonPurple, AppTheme.neonCyan],
-                      ),
-                boxShadow: isStartPage
-                    ? []
-                    : [
-                        BoxShadow(
-                          color: AppTheme.neonCyan.withAlpha(60),
-                          blurRadius: 14,
-                          offset: const Offset(0, 4),
-                        ),
-                      ],
-              ),
-              child: ElevatedButton.icon(
-                onPressed: isStartPage || _isFetchingStreams
-                    ? null
-                    : _onDownloadPressed,
-                icon: Icon(
-                  _isFetchingStreams
-                      ? Icons.hourglass_top_rounded
-                      : Icons.download_rounded,
-                  size: 20,
-                  color: isStartPage ? Colors.white38 : Colors.white,
-                ),
-                label: Text(
-                  _isFetchingStreams ? 'Wait...' : 'Download',
-                  style: TextStyle(
-                    fontSize: 15,
-                    fontWeight: FontWeight.w700,
-                    letterSpacing: 0.5,
-                    color: isStartPage ? Colors.white38 : Colors.white,
                   ),
-                ),
-                style: ElevatedButton.styleFrom(
-                  backgroundColor: Colors.transparent,
-                  shadowColor: Colors.transparent,
-                  disabledForegroundColor: Colors.white38,
-                  disabledBackgroundColor: Colors.transparent,
-                  padding: const EdgeInsets.symmetric(horizontal: 24),
-                  shape: RoundedRectangleBorder(
-                    borderRadius: BorderRadius.circular(23),
-                  ),
-                ),
-              ),
-            ),
-          ),
-        ],
-      ),
-    );
-  }
-}
-
-class _BottomNavIcon extends StatelessWidget {
-  final IconData icon;
-  final String label;
-  final VoidCallback onTap;
-
-  const _BottomNavIcon({
-    required this.icon,
-    required this.label,
-    required this.onTap,
-  });
-
-  @override
-  Widget build(BuildContext context) {
-    return InkWell(
-      borderRadius: BorderRadius.circular(10),
-      onTap: onTap,
-      child: Padding(
-        padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 6),
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            Icon(icon, color: Colors.white70, size: 20),
-            const SizedBox(height: 2),
-            Text(
-              label,
-              style: const TextStyle(
-                color: AppTheme.kTextDim,
-                fontSize: 9,
-                fontWeight: FontWeight.w500,
-              ),
+                );
+              },
+              onDownloadPressed: _onDownloadPressed,
             ),
           ],
         ),
       ),
     );
   }
-}
 
-class _ShortcutTile extends StatelessWidget {
-  final IconData icon;
-  final String label;
-  final Color color;
-  final VoidCallback onTap;
-
-  const _ShortcutTile({
-    required this.icon,
-    required this.label,
-    required this.color,
-    required this.onTap,
-  });
-
-  @override
-  Widget build(BuildContext context) {
-    return Material(
-      color: AppTheme.kSurface,
-      borderRadius: BorderRadius.circular(16),
-      child: InkWell(
-        borderRadius: BorderRadius.circular(16),
-        onTap: onTap,
-        child: Container(
-          width: 120,
-          padding: const EdgeInsets.symmetric(vertical: 20, horizontal: 12),
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              Icon(icon, color: color, size: 36),
-              const SizedBox(height: 12),
-              Text(
-                label,
-                style: const TextStyle(
-                  color: Colors.white,
-                  fontSize: 14,
-                  fontWeight: FontWeight.w600,
-                ),
-              ),
-            ],
-          ),
-        ),
-      ),
-    );
-  }
 }

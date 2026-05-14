@@ -4,6 +4,7 @@ import 'dart:io';
 import 'package:path_provider/path_provider.dart';
 
 import '../../../features/downloader/domain/entities/download_entity.dart';
+import '../../../features/downloader/data/models/download_metadata_model.dart';
 
 /// Information combining the file and its metadata.
 class DownloadedFileInfo {
@@ -107,8 +108,14 @@ class FileManager {
 
   /// Returns the absolute path to the downloads directory.
   static Future<String> get downloadsPath async {
-    final dir = await getApplicationDocumentsDirectory();
-    final path = '${dir.path}/$_folderName';
+    String path;
+    if (Platform.isAndroid) {
+      path = '/storage/emulated/0/Download/$_folderName';
+    } else {
+      final dir = await getApplicationDocumentsDirectory();
+      path = '${dir.path}/$_folderName';
+    }
+
     final directory = Directory(path);
     if (!directory.existsSync()) {
       directory.createSync(recursive: true);
@@ -143,7 +150,7 @@ class FileManager {
         try {
           final content = jsonFile.readAsStringSync();
           final jsonMap = jsonDecode(content) as Map<String, dynamic>;
-          metadata = DownloadMetadata.fromJson(jsonMap);
+          metadata = DownloadMetadataModel.fromJson(jsonMap);
         } catch (_) {}
       }
 
@@ -171,7 +178,7 @@ class FileManager {
   ) async {
     try {
       final file = File('$filePath.json');
-      await file.writeAsString(jsonEncode(metadata.toJson()));
+      await file.writeAsString(jsonEncode(DownloadMetadataModel.fromEntity(metadata).toJson()));
     } catch (_) {}
   }
 

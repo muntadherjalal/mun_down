@@ -1,1 +1,1 @@
-// Barrel file for downloads_history domain entities.
+export 'download_history_item.dart';

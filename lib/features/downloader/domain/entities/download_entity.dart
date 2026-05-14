@@ -84,7 +84,7 @@ class DownloadEntity extends Equatable {
   ];
 }
 
-class DownloadMetadata {
+class DownloadMetadata extends Equatable {
   final String title;
   final String? thumbnailUrl;
   final String? author;
@@ -95,7 +95,7 @@ class DownloadMetadata {
   final String format;
   final String quality;
 
-  DownloadMetadata({
+  const DownloadMetadata({
     required this.title,
     this.thumbnailUrl,
     required this.author,
@@ -107,30 +107,17 @@ class DownloadMetadata {
     required this.quality,
   });
 
-  Map<String, dynamic> toJson() => {
-    'title': title,
-    'thumbnailUrl': thumbnailUrl,
-    'author': author,
-    'duration': duration?.inSeconds,
-    'sourceUrl': sourceUrl,
-    'downloadedAt': downloadedAt.toIso8601String(),
-    'fileSizeBytes': fileSizeBytes,
-    'format': format,
-    'quality': quality,
-  };
+  @override
+  List<Object?> get props => [
+        title,
+        thumbnailUrl,
+        author,
+        duration,
+        sourceUrl,
+        downloadedAt,
+        fileSizeBytes,
+        format,
+        quality,
+      ];
 
-  factory DownloadMetadata.fromJson(Map<String, dynamic> json) =>
-      DownloadMetadata(
-        title: json['title'],
-        thumbnailUrl: json['thumbnailUrl'],
-        author: json['author'],
-        duration: json['duration'] != null
-            ? Duration(seconds: json['duration'])
-            : null,
-        sourceUrl: json['sourceUrl'],
-        downloadedAt: DateTime.parse(json['downloadedAt']),
-        fileSizeBytes: json['fileSizeBytes'],
-        format: json['format'],
-        quality: json['quality'],
-      );
 }

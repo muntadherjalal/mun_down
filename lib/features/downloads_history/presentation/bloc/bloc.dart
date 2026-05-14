@@ -1,1 +1,1 @@
-// Barrel file for downloads_history BLoC.
+export 'downloads_history_bloc.dart';

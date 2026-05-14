@@ -8,7 +8,6 @@ import 'package:flutter_bloc/flutter_bloc.dart';
 import '../../../../core/network/network_info.dart';
 import '../../domain/entities/download_entity.dart';
 import '../../domain/repositories/downloader_repository.dart';
-import '../../../files/presentation/pages/files_page.dart';
 
 part 'downloader_event.dart';
 part 'downloader_state.dart';
@@ -100,7 +99,6 @@ class DownloaderBloc extends Bloc<DownloaderEvent, DownloaderState> {
 
         // Silent completion: notify Library to refresh without navigation.
         if (mappedState is DownloaderCompletedState) {
-          FilesPage.refreshNotifier.value++;
           _lastSavePath = null; // Clear path on success
         }
 

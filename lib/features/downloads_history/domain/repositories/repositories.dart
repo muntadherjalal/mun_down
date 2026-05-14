@@ -1,1 +1,1 @@
-// Barrel file for downloads_history domain repository contracts.
+export 'downloads_history_repository.dart';

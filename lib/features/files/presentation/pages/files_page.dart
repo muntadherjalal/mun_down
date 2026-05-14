@@ -5,8 +5,13 @@ import 'package:share_plus/share_plus.dart';
 import '../../../../core/themes/app_theme.dart';
 import '../../../../core/utils/biometric_helper.dart';
 import '../../../../core/utils/file_manager.dart';
+import '../../../../injection_container.dart';
 // غيرنا الاستيراد حتى يقرأ صفحة المشغل الأساسية
 import '../widgets/video_player_view.dart';
+import '../widgets/widgets.dart';
+import '../bloc/bloc.dart';
+import '../../../downloader/presentation/bloc/downloader_bloc.dart';
+import 'package:flutter_bloc/flutter_bloc.dart';
 
 enum LibraryFilter { all, video, audio }
 
@@ -17,9 +22,6 @@ class FilesPage extends StatefulWidget {
   final VoidCallback? onRefreshRequested;
 
   const FilesPage({super.key, this.onRefreshRequested});
-
-  /// Allows external callers to trigger a refresh.
-  static final refreshNotifier = ValueNotifier<int>(0);
 
   @override
   State<FilesPage> createState() => FilesPageState();
@@ -33,9 +35,6 @@ class FilesPageState extends State<FilesPage>
   LibraryFilter _currentFilter = LibraryFilter.all;
   ViewMode _viewMode = ViewMode.list;
 
-  /// Tracks which file paths are locked (private vault).
-  final Set<String> _lockedFiles = {};
-
   @override
   bool get wantKeepAlive => true;
 
@@ -43,16 +42,12 @@ class FilesPageState extends State<FilesPage>
   void initState() {
     super.initState();
     _loadFiles();
-    FilesPage.refreshNotifier.addListener(_onExternalRefresh);
   }
 
   @override
   void dispose() {
-    FilesPage.refreshNotifier.removeListener(_onExternalRefresh);
     super.dispose();
   }
-
-  void _onExternalRefresh() => _loadFiles();
 
   Future<void> refreshFiles() => _loadFiles();
 
@@ -71,8 +66,8 @@ class FilesPageState extends State<FilesPage>
 
   /// Returns `true` if the file is unlocked (or not locked).
   /// If locked, triggers biometric auth and returns the result.
-  Future<bool> _ensureUnlocked(DownloadedFileInfo file) async {
-    if (!_lockedFiles.contains(file.path)) return true;
+  Future<bool> _ensureUnlocked(DownloadedFileInfo file, Set<String> lockedFiles) async {
+    if (!lockedFiles.contains(file.path)) return true;
     final ok = await BiometricHelper.authenticate(
       reason: 'Authenticate to access "${file.displayTitle}"',
     );
@@ -93,8 +88,8 @@ class FilesPageState extends State<FilesPage>
 
   // ── Actions ─────────────────────────────────────────────────
 
-  Future<void> _openFile(DownloadedFileInfo file) async {
-    if (!await _ensureUnlocked(file)) return;
+  Future<void> _openFile(DownloadedFileInfo file, Set<String> lockedFiles) async {
+    if (!await _ensureUnlocked(file, lockedFiles)) return;
 
     if (file.isVideo || file.isAudio) {
       if (!mounted) return;
@@ -107,21 +102,15 @@ class FilesPageState extends State<FilesPage>
     }
   }
 
-  Future<void> _shareFile(DownloadedFileInfo file) async {
-    if (!await _ensureUnlocked(file)) return;
+  Future<void> _shareFile(DownloadedFileInfo file, Set<String> lockedFiles) async {
+    if (!await _ensureUnlocked(file, lockedFiles)) return;
     await Share.shareXFiles([XFile(file.path)]);
   }
 
-  void _toggleLock(DownloadedFileInfo file) {
-    setState(() {
-      if (_lockedFiles.contains(file.path)) {
-        _lockedFiles.remove(file.path);
-      } else {
-        _lockedFiles.add(file.path);
-      }
-    });
+  void _toggleLock(BuildContext context, DownloadedFileInfo file, Set<String> lockedFiles) {
+    context.read<FilesBloc>().add(ToggleFileLockEvent(file.path));
 
-    final isNowLocked = _lockedFiles.contains(file.path);
+    final isNowLocked = !lockedFiles.contains(file.path);
     ScaffoldMessenger.of(context).showSnackBar(
       SnackBar(
         backgroundColor: AppTheme.kSurface,
@@ -156,12 +145,14 @@ class FilesPageState extends State<FilesPage>
     );
   }
 
-  Future<void> _deleteFile(DownloadedFileInfo file) async {
+  Future<void> _deleteFile(DownloadedFileInfo file, Set<String> lockedFiles) async {
     final confirmed = await _showDeleteDialog(file.displayTitle);
     if (confirmed == true) {
       final ok = await FileManager.deleteFile(file.path);
       if (ok && mounted) {
-        _lockedFiles.remove(file.path);
+        if (lockedFiles.contains(file.path)) {
+          context.read<FilesBloc>().add(ToggleFileLockEvent(file.path));
+        }
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
             backgroundColor: AppTheme.kSurface,
@@ -270,31 +261,53 @@ class FilesPageState extends State<FilesPage>
       displayedFiles = _files.where((f) => f.isAudio).toList();
     }
 
-    return Scaffold(
-      backgroundColor: AppTheme.kDeepBg,
-      body: SafeArea(
-        child: Column(
-          children: [
-            _buildHeader(),
-            _buildToolbar(),
-            Expanded(
-              child: _loading
-                  ? const Center(
-                      child: CircularProgressIndicator(
-                        color: AppTheme.neonCyan,
-                      ),
-                    )
-                  : displayedFiles.isEmpty
-                  ? _buildEmpty()
-                  : _buildFileList(displayedFiles),
+    return BlocProvider(
+      create: (_) => sl<FilesBloc>()..add(LoadLockedFilesEvent()),
+      child: BlocBuilder<FilesBloc, FilesState>(
+        builder: (context, state) {
+          final lockedFiles = state is FilesLoaded ? state.lockedFiles : <String>{};
+          return BlocListener<DownloaderBloc, DownloaderState>(
+            listener: (context, downloaderState) {
+              if (downloaderState is DownloaderCompletedState) {
+                _loadFiles();
+              }
+            },
+            child: Scaffold(
+              backgroundColor: AppTheme.kDeepBg,
+            body: SafeArea(
+              child: Column(
+                children: [
+                  _buildHeader(lockedFiles),
+                  FilesControlBar(
+                    currentFilter: _currentFilter,
+                    onFilterChanged: (filter) =>
+                        setState(() => _currentFilter = filter),
+                    viewMode: _viewMode,
+                    onViewModeChanged: (mode) =>
+                        setState(() => _viewMode = mode),
+                  ),
+                  Expanded(
+                    child: _loading
+                        ? const Center(
+                            child: CircularProgressIndicator(
+                              color: AppTheme.neonCyan,
+                            ),
+                          )
+                        : displayedFiles.isEmpty
+                        ? const EmptyFilesWidget()
+                        : _buildFileList(displayedFiles, lockedFiles, context),
+                  ),
+                ],
+              ),
             ),
-          ],
-        ),
+            ),
+          );
+        },
       ),
     );
   }
 
-  Widget _buildHeader() {
+  Widget _buildHeader(Set<String> lockedFiles) {
     return Container(
       padding: const EdgeInsets.fromLTRB(20, 16, 8, 4),
       color: AppTheme.kDeepBg,
@@ -326,7 +339,7 @@ class FilesPageState extends State<FilesPage>
                 if (!_loading)
                   Text(
                     '${_files.length} file${_files.length == 1 ? '' : 's'}'
-                    '${_lockedFiles.isNotEmpty ? ' • ${_lockedFiles.length} locked' : ''}',
+                    '${lockedFiles.isNotEmpty ? ' • ${lockedFiles.length} locked' : ''}',
                     style: const TextStyle(
                       color: AppTheme.kTextDim,
                       fontSize: 12,
@@ -349,123 +362,7 @@ class FilesPageState extends State<FilesPage>
     );
   }
 
-  Widget _buildToolbar() {
-    return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
-      child: Row(
-        children: [
-          // Filters
-          _buildFilterChip('All', LibraryFilter.all),
-          const SizedBox(width: 8),
-          _buildFilterChip('Video', LibraryFilter.video),
-          const SizedBox(width: 8),
-          _buildFilterChip('Audio', LibraryFilter.audio),
-          const Spacer(),
-          // View Mode Toggles
-          Container(
-            decoration: BoxDecoration(
-              color: AppTheme.kSurface,
-              borderRadius: BorderRadius.circular(8),
-              border: Border.all(color: Colors.white10),
-            ),
-            child: Row(
-              children: [
-                _buildViewModeButton(Icons.view_list_rounded, ViewMode.list),
-                _buildViewModeButton(Icons.grid_view_rounded, ViewMode.grid),
-              ],
-            ),
-          ),
-        ],
-      ),
-    );
-  }
-
-  Widget _buildFilterChip(String label, LibraryFilter filter) {
-    final isSelected = _currentFilter == filter;
-    return InkWell(
-      onTap: () => setState(() => _currentFilter = filter),
-      borderRadius: BorderRadius.circular(16),
-      child: Container(
-        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
-        decoration: BoxDecoration(
-          color: isSelected
-              ? AppTheme.neonCyan.withAlpha(25)
-              : Colors.transparent,
-          border: Border.all(
-            color: isSelected ? AppTheme.neonCyan : Colors.white24,
-          ),
-          borderRadius: BorderRadius.circular(16),
-        ),
-        child: Text(
-          label,
-          style: TextStyle(
-            color: isSelected ? AppTheme.neonCyan : AppTheme.kTextDim,
-            fontSize: 13,
-            fontWeight: isSelected ? FontWeight.w600 : FontWeight.w400,
-          ),
-        ),
-      ),
-    );
-  }
-
-  Widget _buildViewModeButton(IconData icon, ViewMode mode) {
-    final isSelected = _viewMode == mode;
-    return InkWell(
-      onTap: () => setState(() => _viewMode = mode),
-      borderRadius: BorderRadius.circular(8),
-      child: Container(
-        padding: const EdgeInsets.all(6),
-        decoration: BoxDecoration(
-          color: isSelected ? Colors.white12 : Colors.transparent,
-          borderRadius: BorderRadius.circular(8),
-        ),
-        child: Icon(
-          icon,
-          size: 20,
-          color: isSelected ? Colors.white : AppTheme.kTextDim,
-        ),
-      ),
-    );
-  }
-
-  Widget _buildEmpty() {
-    return Center(
-      child: Column(
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          Container(
-            width: 80,
-            height: 80,
-            decoration: BoxDecoration(
-              shape: BoxShape.circle,
-              color: AppTheme.neonCyan.withAlpha(12),
-            ),
-            child: Icon(
-              Icons.video_library_rounded,
-              size: 40,
-              color: AppTheme.neonCyan.withAlpha(70),
-            ),
-          ),
-          const SizedBox(height: 20),
-          Text(
-            'Your Library is empty',
-            style: TextStyle(
-              color: Colors.white.withAlpha(140),
-              fontSize: 17,
-              fontWeight: FontWeight.w600,
-            ),
-          ),
-          const SizedBox(height: 6),
-          Text(
-            'Downloaded media will appear here.',
-            style: TextStyle(color: Colors.white.withAlpha(70), fontSize: 13),
-          ),
-        ],
-      ),
-    );
-  }
-
-  Widget _buildFileList(List<DownloadedFileInfo> displayedFiles) {
+  Widget _buildFileList(List<DownloadedFileInfo> displayedFiles, Set<String> lockedFiles, BuildContext context) {
     return RefreshIndicator(
       color: AppTheme.neonCyan,
       backgroundColor: AppTheme.kSurface,
@@ -477,14 +374,14 @@ class FilesPageState extends State<FilesPage>
               separatorBuilder: (_, _) => const SizedBox(height: 8),
               itemBuilder: (context, index) {
                 final file = displayedFiles[index];
-                final isLocked = _lockedFiles.contains(file.path);
-                return _FileListCard(
+                final isLocked = lockedFiles.contains(file.path);
+                return FileListCard(
                   file: file,
                   isLocked: isLocked,
-                  onOpen: () => _openFile(file),
-                  onShare: () => _shareFile(file),
-                  onLock: () => _toggleLock(file),
-                  onDelete: () => _deleteFile(file),
+                  onOpen: () => _openFile(file, lockedFiles),
+                  onShare: () => _shareFile(file, lockedFiles),
+                  onLock: () => _toggleLock(context, file, lockedFiles),
+                  onDelete: () => _deleteFile(file, lockedFiles),
                 );
               },
             )
@@ -499,429 +396,17 @@ class FilesPageState extends State<FilesPage>
               itemCount: displayedFiles.length,
               itemBuilder: (context, index) {
                 final file = displayedFiles[index];
-                final isLocked = _lockedFiles.contains(file.path);
-                return _FileGridCard(
+                final isLocked = lockedFiles.contains(file.path);
+                return FileGridCard(
                   file: file,
                   isLocked: isLocked,
-                  onOpen: () => _openFile(file),
-                  onShare: () => _shareFile(file),
-                  onLock: () => _toggleLock(file),
-                  onDelete: () => _deleteFile(file),
+                  onOpen: () => _openFile(file, lockedFiles),
+                  onShare: () => _shareFile(file, lockedFiles),
+                  onLock: () => _toggleLock(context, file, lockedFiles),
+                  onDelete: () => _deleteFile(file, lockedFiles),
                 );
               },
             ),
-    );
-  }
-}
-
-// ──────────────────────────────────────────────────────────────
-//  File List Card Widget
-// ──────────────────────────────────────────────────────────────
-
-class _FileListCard extends StatelessWidget {
-  final DownloadedFileInfo file;
-  final bool isLocked;
-  final VoidCallback onOpen;
-  final VoidCallback onShare;
-  final VoidCallback onLock;
-  final VoidCallback onDelete;
-
-  const _FileListCard({
-    required this.file,
-    required this.isLocked,
-    required this.onOpen,
-    required this.onShare,
-    required this.onLock,
-    required this.onDelete,
-  });
-
-  @override
-  Widget build(BuildContext context) {
-    final accentColor = isLocked
-        ? const Color(0xFFFFA726)
-        : file.isVideo
-        ? AppTheme.neonPurple
-        : file.isAudio
-        ? AppTheme.neonCyan
-        : const Color(0xFFFFA726);
-
-    final iconData = isLocked
-        ? Icons.lock_rounded
-        : file.isVideo
-        ? Icons.videocam_rounded
-        : file.isAudio
-        ? Icons.audiotrack_rounded
-        : Icons.insert_drive_file_rounded;
-
-    return Container(
-      decoration: BoxDecoration(
-        color: AppTheme.kGlassWhite,
-        borderRadius: BorderRadius.circular(16),
-        border: Border.all(color: accentColor.withAlpha(isLocked ? 50 : 25)),
-      ),
-      child: Material(
-        color: Colors.transparent,
-        child: InkWell(
-          borderRadius: BorderRadius.circular(16),
-          onTap: onOpen,
-          child: Padding(
-            padding: const EdgeInsets.fromLTRB(14, 14, 8, 14),
-            child: Row(
-              children: [
-                // Icon / Thumbnail placeholder
-                Container(
-                  width: 56,
-                  height: 56,
-                  decoration: BoxDecoration(
-                    borderRadius: BorderRadius.circular(12),
-                    gradient: LinearGradient(
-                      begin: Alignment.topLeft,
-                      end: Alignment.bottomRight,
-                      colors: [
-                        accentColor.withAlpha(50),
-                        accentColor.withAlpha(18),
-                      ],
-                    ),
-                    boxShadow: isLocked
-                        ? [
-                            BoxShadow(
-                              color: const Color(0xFFFFA726).withAlpha(30),
-                              blurRadius: 10,
-                            ),
-                          ]
-                        : [],
-                  ),
-                  child: file.metadata?.thumbnailUrl != null && !isLocked
-                      ? ClipRRect(
-                          borderRadius: BorderRadius.circular(12),
-                          child: Image.network(
-                            file.metadata!.thumbnailUrl!,
-                            fit: BoxFit.cover,
-                            errorBuilder: (context, error, stackTrace) =>
-                                Icon(iconData, color: accentColor, size: 26),
-                          ),
-                        )
-                      : Icon(iconData, color: accentColor, size: 26),
-                ),
-                const SizedBox(width: 14),
-                // File info
-                Expanded(
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Text(
-                        file.displayTitle,
-                        style: const TextStyle(
-                          color: Colors.white,
-                          fontSize: 14,
-                          fontWeight: FontWeight.w600,
-                        ),
-                        maxLines: 1,
-                        overflow: TextOverflow.ellipsis,
-                      ),
-                      if (file.displayAuthor != 'Unknown Author')
-                        Padding(
-                          padding: const EdgeInsets.only(top: 2, bottom: 2),
-                          child: Text(
-                            file.displayAuthor,
-                            style: const TextStyle(
-                              color: AppTheme.kTextDim,
-                              fontSize: 12,
-                            ),
-                            maxLines: 1,
-                            overflow: TextOverflow.ellipsis,
-                          ),
-                        ),
-                      const SizedBox(height: 4),
-                      Row(
-                        children: [
-                          _MetaChip(
-                            text: file.formattedSize,
-                            color: accentColor,
-                          ),
-                          const SizedBox(width: 8),
-                          _MetaChip(
-                            text: file.extension.toUpperCase(),
-                            color: accentColor,
-                            outlined: true,
-                          ),
-                          if (file.displayDuration != null) ...[
-                            const SizedBox(width: 8),
-                            _MetaChip(
-                              text: file.displayDuration!,
-                              color: Colors.white54,
-                            ),
-                          ],
-                          if (isLocked) ...[
-                            const SizedBox(width: 8),
-                            const _MetaChip(
-                              text: '🔒 VAULT',
-                              color: Color(0xFFFFA726),
-                              outlined: true,
-                            ),
-                          ],
-                        ],
-                      ),
-                    ],
-                  ),
-                ),
-                // Action menu
-                PopupMenuButton<String>(
-                  icon: const Icon(
-                    Icons.more_vert_rounded,
-                    color: Colors.white54,
-                    size: 20,
-                  ),
-                  color: AppTheme.kSurface,
-                  shape: RoundedRectangleBorder(
-                    borderRadius: BorderRadius.circular(12),
-                  ),
-                  onSelected: (value) {
-                    if (value == 'play') onOpen();
-                    if (value == 'share') onShare();
-                    if (value == 'lock') onLock();
-                    if (value == 'delete') onDelete();
-                  },
-                  itemBuilder: (context) => [
-                    PopupMenuItem(
-                      value: 'play',
-                      child: Row(
-                        children: [
-                          const Icon(
-                            Icons.play_arrow_rounded,
-                            color: AppTheme.neonCyan,
-                            size: 18,
-                          ),
-                          const SizedBox(width: 10),
-                          Text(
-                            file.isVideo ? 'Play Video' : 'Play Audio',
-                            style: const TextStyle(color: Colors.white),
-                          ),
-                        ],
-                      ),
-                    ),
-                    PopupMenuItem(
-                      value: 'share',
-                      child: const Row(
-                        children: [
-                          Icon(
-                            Icons.share_rounded,
-                            color: AppTheme.neonPurple,
-                            size: 18,
-                          ),
-                          SizedBox(width: 10),
-                          Text('Share', style: TextStyle(color: Colors.white)),
-                        ],
-                      ),
-                    ),
-                    PopupMenuItem(
-                      value: 'lock',
-                      child: Row(
-                        children: [
-                          Icon(
-                            isLocked
-                                ? Icons.lock_open_rounded
-                                : Icons.lock_rounded,
-                            color: const Color(0xFFFFA726),
-                            size: 18,
-                          ),
-                          const SizedBox(width: 10),
-                          Text(
-                            isLocked ? 'Unlock File' : 'Move to Vault',
-                            style: const TextStyle(color: Colors.white),
-                          ),
-                        ],
-                      ),
-                    ),
-                    const PopupMenuDivider(),
-                    PopupMenuItem(
-                      value: 'delete',
-                      child: Row(
-                        children: [
-                          Icon(
-                            Icons.delete_outline_rounded,
-                            color: AppTheme.kErrorRed.withAlpha(200),
-                            size: 18,
-                          ),
-                          const SizedBox(width: 10),
-                          const Text(
-                            'Delete',
-                            style: TextStyle(color: AppTheme.kErrorRed),
-                          ),
-                        ],
-                      ),
-                    ),
-                  ],
-                ),
-              ],
-            ),
-          ),
-        ),
-      ),
-    );
-  }
-}
-
-// ──────────────────────────────────────────────────────────────
-//  File Grid Card Widget
-// ──────────────────────────────────────────────────────────────
-
-class _FileGridCard extends StatelessWidget {
-  final DownloadedFileInfo file;
-  final bool isLocked;
-  final VoidCallback onOpen;
-  final VoidCallback onShare;
-  final VoidCallback onLock;
-  final VoidCallback onDelete;
-
-  const _FileGridCard({
-    required this.file,
-    required this.isLocked,
-    required this.onOpen,
-    required this.onShare,
-    required this.onLock,
-    required this.onDelete,
-  });
-
-  @override
-  Widget build(BuildContext context) {
-    final accentColor = isLocked
-        ? const Color(0xFFFFA726)
-        : file.isVideo
-        ? AppTheme.neonPurple
-        : file.isAudio
-        ? AppTheme.neonCyan
-        : const Color(0xFFFFA726);
-
-    final iconData = isLocked
-        ? Icons.lock_rounded
-        : file.isVideo
-        ? Icons.videocam_rounded
-        : file.isAudio
-        ? Icons.audiotrack_rounded
-        : Icons.insert_drive_file_rounded;
-
-    return Container(
-      decoration: BoxDecoration(
-        color: AppTheme.kGlassWhite,
-        borderRadius: BorderRadius.circular(16),
-        border: Border.all(color: accentColor.withAlpha(isLocked ? 50 : 25)),
-      ),
-      child: Material(
-        color: Colors.transparent,
-        child: InkWell(
-          borderRadius: BorderRadius.circular(16),
-          onTap: onOpen,
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.stretch,
-            children: [
-              // Thumbnail area
-              Expanded(
-                child: Container(
-                  decoration: BoxDecoration(
-                    borderRadius: const BorderRadius.vertical(
-                      top: Radius.circular(16),
-                    ),
-                    gradient: LinearGradient(
-                      begin: Alignment.topLeft,
-                      end: Alignment.bottomRight,
-                      colors: [
-                        accentColor.withAlpha(30),
-                        accentColor.withAlpha(10),
-                      ],
-                    ),
-                  ),
-                  child: file.metadata?.thumbnailUrl != null && !isLocked
-                      ? ClipRRect(
-                          borderRadius: const BorderRadius.vertical(
-                            top: Radius.circular(16),
-                          ),
-                          child: Image.network(
-                            file.metadata!.thumbnailUrl!,
-                            fit: BoxFit.cover,
-                            errorBuilder: (context, error, stackTrace) =>
-                                Icon(iconData, color: accentColor, size: 40),
-                          ),
-                        )
-                      : Icon(iconData, color: accentColor, size: 40),
-                ),
-              ),
-              // Info area
-              Padding(
-                padding: const EdgeInsets.all(12),
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Text(
-                      file.displayTitle,
-                      style: const TextStyle(
-                        color: Colors.white,
-                        fontSize: 13,
-                        fontWeight: FontWeight.w600,
-                      ),
-                      maxLines: 2,
-                      overflow: TextOverflow.ellipsis,
-                    ),
-                    const SizedBox(height: 6),
-                    Row(
-                      children: [
-                        _MetaChip(text: file.formattedSize, color: accentColor),
-                        const Spacer(),
-                        if (isLocked)
-                          const Icon(
-                            Icons.lock_rounded,
-                            color: Color(0xFFFFA726),
-                            size: 14,
-                          )
-                        else
-                          Icon(iconData, color: AppTheme.kTextDim, size: 14),
-                      ],
-                    ),
-                  ],
-                ),
-              ),
-            ],
-          ),
-        ),
-      ),
-    );
-  }
-}
-
-// ──────────────────────────────────────────────────────────────
-//  Common Utilities
-// ──────────────────────────────────────────────────────────────
-
-class _MetaChip extends StatelessWidget {
-  final String text;
-  final Color color;
-  final bool outlined;
-
-  const _MetaChip({
-    required this.text,
-    required this.color,
-    this.outlined = false,
-  });
-
-  @override
-  Widget build(BuildContext context) {
-    return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
-      decoration: BoxDecoration(
-        color: outlined ? Colors.transparent : color.withAlpha(18),
-        borderRadius: BorderRadius.circular(4),
-        border: outlined
-            ? Border.all(color: color.withAlpha(60), width: 0.8)
-            : null,
-      ),
-      child: Text(
-        text,
-        style: TextStyle(
-          color: color,
-          fontSize: 10,
-          fontWeight: FontWeight.w600,
-        ),
-      ),
     );
   }
 }

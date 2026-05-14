@@ -46,6 +46,7 @@ dependencies:
   connectivity_plus: ^6.1.1
   shared_preferences: ^2.3.5
   audio_session: ^0.2.3
+  dartz: ^0.10.1
 
 dev_dependencies:
   flutter_test:

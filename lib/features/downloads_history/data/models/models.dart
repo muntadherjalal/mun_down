@@ -1,1 +1,1 @@
-// Barrel file for downloads_history data models.
+export 'download_history_item_model.dart';

@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
 import 'core/themes/app_theme.dart';
+import 'core/utils/youtube_extractor.dart';
 import 'features/home/presentation/pages/main_scaffold.dart';
 import 'injection_container.dart' as di;
 
@@ -32,13 +33,29 @@ class MunDownApp extends StatefulWidget {
   State<MunDownApp> createState() => MunDownAppState();
 }
 
-class MunDownAppState extends State<MunDownApp> {
+class MunDownAppState extends State<MunDownApp> with WidgetsBindingObserver {
   late ThemeMode _themeMode;
 
   @override
   void initState() {
     super.initState();
     _themeMode = widget.initialThemeMode;
+    WidgetsBinding.instance.addObserver(this);
+  }
+
+  @override
+  void dispose() {
+    WidgetsBinding.instance.removeObserver(this);
+    super.dispose();
+  }
+
+  @override
+  void didChangeAppLifecycleState(AppLifecycleState state) {
+    if (state == AppLifecycleState.detached) {
+      // App is being terminated, dispose resources
+      di.sl<YouTubeExtractor>().dispose();
+    }
+    super.didChangeAppLifecycleState(state);
   }
 
   bool get isDarkMode => _themeMode == ThemeMode.dark;
