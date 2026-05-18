@@ -44,16 +44,16 @@ class _DownloaderPageState extends State<DownloaderPage>
 
   Widget _buildAppBar() {
     return Container(
-      padding: const EdgeInsets.fromLTRB(24, 16, 24, 16),
+      padding: const EdgeInsets.fromLTRB(16, 10, 16, 10),
       child: Row(children: [
         ShaderMask(
           shaderCallback: (rect) => const LinearGradient(
             colors: [AppTheme.neonPurple, AppTheme.neonCyan],
           ).createShader(rect),
-          child: const Icon(Icons.downloading_rounded, color: Colors.white, size: 28),
+          child: const Icon(Icons.downloading_rounded, color: Colors.white, size: 20),
         ),
-        const SizedBox(width: 12),
-        const Text('Downloads', style: TextStyle(color: Colors.white, fontWeight: FontWeight.w700, fontSize: 24, letterSpacing: 0.5)),
+        const SizedBox(width: 8),
+        const Text('Downloads', style: TextStyle(color: Colors.white, fontWeight: FontWeight.w700, fontSize: 18, letterSpacing: 0.3)),
       ]),
     );
   }

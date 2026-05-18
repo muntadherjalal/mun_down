@@ -6,7 +6,6 @@ import '../../../../injection_container.dart' as di;
 import '../../../browser/presentation/pages/browser_page.dart';
 import '../../../downloader/presentation/bloc/downloader_bloc.dart';
 import '../../../downloader/presentation/pages/downloader_page.dart';
-import '../../../downloads_history/presentation/pages/pages.dart';
 import '../../../files/presentation/pages/files_page.dart';
 import '../../../settings/presentation/pages/settings_page.dart';
 
@@ -52,7 +51,6 @@ class _MainScaffoldState extends State<MainScaffold> {
             BrowserPage(onTabSwitch: _onTabTapped),
             const DownloaderPage(),
             const FilesPage(),
-            const DownloadsHistoryPage(),
             const SettingsPage(),
           ],
         ),
@@ -71,7 +69,7 @@ class _MainScaffoldState extends State<MainScaffold> {
       ),
       child: SafeArea(
         child: Padding(
-          padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 6),
+          padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
           child: Row(
             mainAxisAlignment: MainAxisAlignment.spaceAround,
             children: [
@@ -93,8 +91,7 @@ class _MainScaffoldState extends State<MainScaffold> {
                 },
               ),
               _TabItem(icon: Icons.video_library_rounded, label: 'Library', isSelected: _currentIndex == 2, onTap: () => _onTabTapped(2)),
-              _TabItem(icon: Icons.history_rounded, label: 'History', isSelected: _currentIndex == 3, onTap: () => _onTabTapped(3)),
-              _TabItem(icon: Icons.settings_rounded, label: 'Settings', isSelected: _currentIndex == 4, onTap: () => _onTabTapped(4)),
+              _TabItem(icon: Icons.settings_rounded, label: 'Settings', isSelected: _currentIndex == 3, onTap: () => _onTabTapped(3)),
             ],
           ),
         ),
@@ -122,45 +119,42 @@ class _TabItem extends StatelessWidget {
   Widget build(BuildContext context) {
     return Expanded(
       child: InkWell(
-        borderRadius: BorderRadius.circular(12),
+        borderRadius: BorderRadius.circular(10),
         onTap: onTap,
         child: AnimatedContainer(
           duration: const Duration(milliseconds: 250),
-          padding: const EdgeInsets.symmetric(vertical: 8),
+          padding: const EdgeInsets.symmetric(vertical: 4),
           child: Column(
             mainAxisSize: MainAxisSize.min,
             children: [
               Stack(
                 clipBehavior: Clip.none,
                 children: [
-                  Icon(icon, color: isSelected ? AppTheme.neonCyan : AppTheme.kTextDim, size: 24),
+                  Icon(icon, color: isSelected ? AppTheme.neonCyan : AppTheme.kTextDim, size: 20),
                   if (showBadge)
                     Positioned(
-                      right: -6,
-                      top: -4,
+                      right: -5,
+                      top: -3,
                       child: Container(
-                        width: 16,
-                        height: 16,
+                        width: 12,
+                        height: 12,
                         decoration: BoxDecoration(
                           color: AppTheme.neonCyan,
                           shape: BoxShape.circle,
-                          border: Border.all(color: AppTheme.kSurface, width: 2),
-                          boxShadow: [BoxShadow(color: AppTheme.neonCyan.withAlpha(100), blurRadius: 6)],
-                        ),
-                        child: const Center(
-                          child: Text('1', style: TextStyle(color: Colors.white, fontSize: 8, fontWeight: FontWeight.w800)),
+                          border: Border.all(color: AppTheme.kSurface, width: 1.5),
+                          boxShadow: [BoxShadow(color: AppTheme.neonCyan.withAlpha(100), blurRadius: 5)],
                         ),
                       ),
                     ),
                 ],
               ),
-              const SizedBox(height: 4),
-              Text(label, style: TextStyle(color: isSelected ? AppTheme.neonCyan : AppTheme.kTextDim, fontSize: 11, fontWeight: isSelected ? FontWeight.w600 : FontWeight.w400)),
+              const SizedBox(height: 2),
+              Text(label, style: TextStyle(color: isSelected ? AppTheme.neonCyan : AppTheme.kTextDim, fontSize: 10, fontWeight: isSelected ? FontWeight.w600 : FontWeight.w400)),
               AnimatedContainer(
                 duration: const Duration(milliseconds: 250),
-                margin: const EdgeInsets.only(top: 4),
-                height: 3,
-                width: isSelected ? 20 : 0,
+                margin: const EdgeInsets.only(top: 2),
+                height: 2,
+                width: isSelected ? 16 : 0,
                 decoration: BoxDecoration(borderRadius: BorderRadius.circular(2), color: isSelected ? AppTheme.neonCyan : Colors.transparent),
               ),
             ],

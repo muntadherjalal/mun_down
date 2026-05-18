@@ -29,6 +29,8 @@ dependencies:
 
   # WebView
   webview_flutter: ^4.13.0
+  webview_flutter_wkwebview: ^3.17.0
+  webview_flutter_android: ^4.0.0
 
   # YouTube Media Extraction
   youtube_explode_dart: ^2.3.9
@@ -37,9 +39,13 @@ dependencies:
   share_plus: ^10.1.4
   open_filex: ^4.5.0
 
-  # Video Player
-  video_player: ^2.9.3
-  chewie: ^1.8.5
+  # Video Player (media_kit - libmpv based, robust playback)
+  media_kit: ^1.1.11
+  media_kit_video: ^1.2.5
+  media_kit_libs_video: ^1.0.5
+
+  # Media muxing (video+audio merge for high-quality YouTube downloads)
+  ffmpeg_kit_flutter_new: ^4.1.0
 
   # Biometric Auth
   local_auth: ^2.3.0

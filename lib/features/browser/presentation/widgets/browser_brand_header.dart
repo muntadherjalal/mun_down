@@ -8,7 +8,7 @@ class BrowserBrandHeader extends StatelessWidget {
   Widget build(BuildContext context) {
     return Container(
       width: double.infinity,
-      padding: const EdgeInsets.symmetric(vertical: 14),
+      padding: const EdgeInsets.symmetric(vertical: 8),
       decoration: BoxDecoration(
         color: AppTheme.kDeepBg,
         border: Border(
@@ -21,14 +21,14 @@ class BrowserBrandHeader extends StatelessWidget {
           const Icon(
             Icons.download_rounded,
             color: AppTheme.neonCyan,
-            size: 22,
+            size: 18,
           ),
-          const SizedBox(width: 8),
+          const SizedBox(width: 6),
           const Text(
             'MunDown',
             style: TextStyle(
               color: Colors.white,
-              fontSize: 18,
+              fontSize: 15,
               fontWeight: FontWeight.w700,
               letterSpacing: 0.5,
             ),

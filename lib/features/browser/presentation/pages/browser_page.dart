@@ -1,7 +1,11 @@
+import 'dart:io';
+
 import '../../../downloader/domain/entities/download_entity.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:webview_flutter/webview_flutter.dart';
+import 'package:webview_flutter_android/webview_flutter_android.dart';
+import 'package:webview_flutter_wkwebview/webview_flutter_wkwebview.dart';
 
 import '../../../../core/themes/app_theme.dart';
 import '../../../../core/utils/youtube_extractor.dart';
@@ -31,10 +35,11 @@ class _BrowserPageState extends State<BrowserPage>
   final bool _adBlockEnabled = true;
   bool _isFetchingStreams = false;
 
-  static const _mobileUserAgent =
-      'Mozilla/5.0 (iPhone; CPU iPhone OS 16_6 like Mac OS X) '
+  // Desktop UA tends to give YouTube proper inline playback in WKWebView.
+  static const _userAgent =
+      'Mozilla/5.0 (Macintosh; Intel Mac OS X 14_4) '
       'AppleWebKit/605.1.15 (KHTML, like Gecko) '
-      'Version/16.6 Mobile/15E148 Safari/604.1';
+      'Version/17.4 Safari/605.1.15';
 
   @override
   bool get wantKeepAlive => true;
@@ -46,10 +51,22 @@ class _BrowserPageState extends State<BrowserPage>
   }
 
   void _initController() {
-    _controller = WebViewController()
+    // Build platform-specific creation params so we can enable inline media
+    // playback and disable the user-gesture requirement on iOS / Android.
+    late final PlatformWebViewControllerCreationParams params;
+    if (WebViewPlatform.instance is WebKitWebViewPlatform) {
+      params = WebKitWebViewControllerCreationParams(
+        allowsInlineMediaPlayback: true,
+        mediaTypesRequiringUserAction: const <PlaybackMediaTypes>{},
+      );
+    } else {
+      params = const PlatformWebViewControllerCreationParams();
+    }
+
+    _controller = WebViewController.fromPlatformCreationParams(params)
       ..setJavaScriptMode(JavaScriptMode.unrestricted)
       ..setBackgroundColor(AppTheme.kDeepBg)
-      ..setUserAgent(_mobileUserAgent)
+      ..setUserAgent(_userAgent)
       ..setNavigationDelegate(
         NavigationDelegate(
           onProgress: (progress) {
@@ -90,6 +107,14 @@ class _BrowserPageState extends State<BrowserPage>
         ),
       )
       ..loadRequest(Uri.parse('about:blank'));
+
+    // Android-specific: allow media autoplay without a user gesture.
+    if (Platform.isAndroid) {
+      final platform = _controller.platform;
+      if (platform is AndroidWebViewController) {
+        platform.setMediaPlaybackRequiresUserGesture(false);
+      }
+    }
   }
 
   bool _isStartPage(String url) {
@@ -178,87 +203,60 @@ class _BrowserPageState extends State<BrowserPage>
 
   Future<void> _handleYouTubeDownload(String url) async {
     if (_isFetchingStreams) return;
-
     setState(() => _isFetchingStreams = true);
 
-    try {
-      final extractor = di.sl<YouTubeExtractor>();
-      final streams = await extractor.extractStreams(url);
+    final extractor = di.sl<YouTubeExtractor>();
+    // Kick off extraction immediately so the bottom sheet can render a
+    // skeleton while we wait.
+    final streamsFuture = extractor.extractStreams(url);
 
-      if (!mounted) return;
+    final selected = await showModalBottomSheet<StreamOption>(
+      context: context,
+      isScrollControlled: true,
+      backgroundColor: Colors.transparent,
+      builder: (_) => QualityBottomSheet(streamsFuture: streamsFuture),
+    );
 
-      if (streams.isEmpty) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(
-            backgroundColor: AppTheme.kSurface,
-            content: Text(
-              'No downloadable streams found',
-              style: TextStyle(color: AppTheme.kErrorRed, fontSize: 13),
-            ),
-          ),
+    if (mounted) {
+      setState(() => _isFetchingStreams = false);
+    }
+
+    if (selected == null || !mounted) return;
+
+    final downloadUrl = selected.url;
+
+    final metadata = DownloadMetadata(
+      title: selected.title,
+      thumbnailUrl: selected.thumbnailUrl,
+      author: selected.author,
+      duration: selected.duration,
+      sourceUrl: url,
+      downloadedAt: DateTime.now(),
+      fileSizeBytes: selected.sizeBytes ?? 0,
+      format: selected.format,
+      quality: selected.quality,
+      needsMux: selected.needsMux,
+      audioUrl: selected.audioUrl,
+      audioFormat: selected.audioFormat,
+    );
+
+    context.read<DownloaderBloc>().add(
+          StartDownloadEvent(url: downloadUrl, metadata: metadata),
         );
-        return;
-      }
 
-      final selected = await showModalBottomSheet<StreamOption>(
-        context: context,
-        isScrollControlled: true,
-        backgroundColor: Colors.transparent,
-        builder: (_) => QualityBottomSheet(streams: streams),
-      );
-
-      if (selected == null || !mounted) return;
-
-      // FIX 1: استخدام selected.url مباشرة مع non-null assertion
-      final downloadUrl = selected.url;
-
-      final metadata = DownloadMetadata(
-        title: selected.title,
-        thumbnailUrl: selected.thumbnailUrl,
-        author: selected.author,
-        duration: selected.duration,
-        sourceUrl: url,
-        downloadedAt: DateTime.now(),
-        fileSizeBytes: selected.sizeBytes ?? 0,
-        format: selected.format,
-        quality: selected.quality,
-      );
-
-      // FIX 2: تمرير metadata بشكل صحيح بدون cast
-      context.read<DownloaderBloc>().add(
-        StartDownloadEvent(url: downloadUrl, metadata: metadata),
-      );
-
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            backgroundColor: AppTheme.kSurface,
-            behavior: SnackBarBehavior.floating,
-            content: Text(
-              'Downloading: ${selected.title}',
-              style: const TextStyle(color: AppTheme.neonCyan, fontSize: 13),
-              maxLines: 1,
-              overflow: TextOverflow.ellipsis,
-            ),
+    if (mounted) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          backgroundColor: AppTheme.kSurface,
+          behavior: SnackBarBehavior.floating,
+          content: Text(
+            'Downloading: ${selected.title}',
+            style: const TextStyle(color: AppTheme.neonCyan, fontSize: 13),
+            maxLines: 1,
+            overflow: TextOverflow.ellipsis,
           ),
-        );
-      }
-    } catch (e) {
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            backgroundColor: AppTheme.kSurface,
-            content: Text(
-              'Failed to fetch streams: ${e.toString().substring(0, (e.toString().length).clamp(0, 80))}',
-              style: const TextStyle(color: AppTheme.kErrorRed, fontSize: 13),
-            ),
-          ),
-        );
-      }
-    } finally {
-      if (mounted) {
-        setState(() => _isFetchingStreams = false);
-      }
+        ),
+      );
     }
   }
 
@@ -351,5 +349,4 @@ class _BrowserPageState extends State<BrowserPage>
       ),
     );
   }
-
 }

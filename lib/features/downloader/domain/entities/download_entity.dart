@@ -95,6 +95,16 @@ class DownloadMetadata extends Equatable {
   final String format;
   final String quality;
 
+  /// When `true`, the primary [DownloaderRemoteDataSource] URL is video-only
+  /// and the [audioUrl] must be downloaded separately and merged via ffmpeg.
+  final bool needsMux;
+
+  /// Audio-only URL paired with the video-only URL for muxing.
+  final String? audioUrl;
+
+  /// Audio container name (e.g. "mp4", "webm").
+  final String? audioFormat;
+
   const DownloadMetadata({
     required this.title,
     this.thumbnailUrl,
@@ -105,6 +115,9 @@ class DownloadMetadata extends Equatable {
     required this.fileSizeBytes,
     required this.format,
     required this.quality,
+    this.needsMux = false,
+    this.audioUrl,
+    this.audioFormat,
   });
 
   @override
@@ -118,6 +131,8 @@ class DownloadMetadata extends Equatable {
         fileSizeBytes,
         format,
         quality,
+        needsMux,
+        audioUrl,
+        audioFormat,
       ];
-
 }

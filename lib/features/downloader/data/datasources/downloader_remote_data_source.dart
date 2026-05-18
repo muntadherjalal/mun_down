@@ -3,6 +3,9 @@ import 'dart:convert';
 import 'dart:io';
 
 import 'package:dio/dio.dart';
+import 'package:ffmpeg_kit_flutter_new/ffmpeg_kit.dart';
+import 'package:ffmpeg_kit_flutter_new/return_code.dart';
+import 'package:path_provider/path_provider.dart';
 import 'package:permission_handler/permission_handler.dart';
 
 import '../../../../core/errors/exceptions.dart';
@@ -25,12 +28,29 @@ abstract class DownloaderRemoteDataSource {
 
 /// Concrete implementation backed by [Dio].
 ///
-/// Uses [Dio.download] for chunked transfer and bridges the
-/// `onReceiveProgress` callback into a [Stream] via a [StreamController].
+/// - Adds YouTube-friendly headers (UA / Referer / Origin / Range) so signed
+///   googlevideo URLs don't get blocked.
+/// - Retries transient failures up to 3 times with exponential backoff.
+/// - When [DownloadMetadata.needsMux] is true, downloads video-only and
+///   audio-only streams separately, then merges them with ffmpeg.
 class DownloaderRemoteDataSourceImpl implements DownloaderRemoteDataSource {
   final Dio dio;
 
   DownloaderRemoteDataSourceImpl({required this.dio});
+
+  /// Headers sent with every Google-video / generic media download. Mimicking
+  /// a desktop browser request lets us bypass YouTube's anti-bot checks.
+  static const Map<String, String> _youtubeHeaders = {
+    'User-Agent':
+        'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 '
+            '(KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36',
+    'Accept': '*/*',
+    'Accept-Language': 'en-US,en;q=0.9',
+    'Origin': 'https://www.youtube.com',
+    'Referer': 'https://www.youtube.com/',
+  };
+
+  static const int _maxRetries = 3;
 
   @override
   Stream<DownloadModel> downloadFile(
@@ -41,7 +61,6 @@ class DownloaderRemoteDataSourceImpl implements DownloaderRemoteDataSource {
   }) {
     final controller = StreamController<DownloadModel>();
 
-    // Fire-and-forget — the stream carries the result.
     _performDownload(
       url,
       controller,
@@ -81,7 +100,8 @@ class DownloaderRemoteDataSourceImpl implements DownloaderRemoteDataSource {
 
       // Check permissions for Android
       if (Platform.isAndroid) {
-        if (await Permission.manageExternalStorage.isGranted || await Permission.storage.isGranted) {
+        if (await Permission.manageExternalStorage.isGranted ||
+            await Permission.storage.isGranted) {
           // Granted
         } else {
           var status = await Permission.manageExternalStorage.request();
@@ -89,7 +109,8 @@ class DownloaderRemoteDataSourceImpl implements DownloaderRemoteDataSource {
             status = await Permission.storage.request();
           }
           if (!status.isGranted) {
-            throw const ServerException(message: 'Storage permission denied');
+            throw const ServerException(
+                message: 'Storage permission denied');
           }
         }
       }
@@ -99,7 +120,6 @@ class DownloaderRemoteDataSourceImpl implements DownloaderRemoteDataSource {
       String? thumbnailUrl;
 
       if (metadata is DownloadMetadata) {
-        // Fix: Accurately determine if it's an audio file
         final isAudio = metadata.quality.toLowerCase().contains('kbps');
         final sanitizedTitle = _sanitizeFileName(metadata.title);
         final ext = _mapFormatToExtension(metadata.format, isAudio: isAudio);
@@ -117,21 +137,13 @@ class DownloaderRemoteDataSourceImpl implements DownloaderRemoteDataSource {
       // If resuming, use existing path. Otherwise, build a new one.
       final savePath = existingSavePath ?? await _buildSavePath(fileName);
 
-      // Calculate starting bytes for Resume functionality
-      int startBytes = 0;
-      final tempFile = File(savePath);
-      if (tempFile.existsSync() && existingSavePath != null) {
-        startBytes = await tempFile.length();
-      }
-
-      // ── Phase 2: Downloading ──────────────────────────────
       final baseModel = DownloadModel(
         id: id,
         originalUrl: url,
         title: existingSavePath != null
             ? savePath.split('/').last
-            : fileName, // keep original name if resuming
-        progress: startBytes > 0 ? -1 : 0, // -1 means calculating if resuming
+            : fileName,
+        progress: 0,
         savePath: savePath,
         status: DownloadStatus.downloading,
         thumbnailUrl: thumbnailUrl,
@@ -139,55 +151,37 @@ class DownloaderRemoteDataSourceImpl implements DownloaderRemoteDataSource {
 
       controller.add(baseModel);
 
-      // Setup Headers for resuming
-      final options = Options(
-        headers: startBytes > 0 ? {'Range': 'bytes=$startBytes-'} : null,
-      );
-
-      await dio.download(
-        url,
-        savePath,
-        options: options,
-        cancelToken: cancelToken as CancelToken?,
-        deleteOnError: false, // CRITICAL: Do not delete file if canceled/paused
-        onReceiveProgress: (received, total) {
-          if (total > 0) {
-            // If resuming, total from Dio is remaining bytes, not absolute total.
-            final realTotal = startBytes > 0 && total != -1
-                ? total + startBytes
-                : total;
-            final realReceived = received + startBytes;
-            final progress = (realReceived / realTotal).clamp(0.0, 1.0);
-
-            controller.add(
-              baseModel.copyWith(
-                progress: progress,
-                receivedBytes: realReceived,
-                totalBytes: realTotal,
-              ),
-            );
-          } else {
-            // Unknown total size
-            controller.add(
-              baseModel.copyWith(
-                receivedBytes: received + startBytes,
-                totalBytes: 0,
-              ),
-            );
-          }
-        },
-      );
+      // ── Phase 2: Downloading ──────────────────────────────
+      if (metadata is DownloadMetadata && metadata.needsMux &&
+          (metadata.audioUrl?.isNotEmpty ?? false)) {
+        await _downloadAndMux(
+          videoUrl: url,
+          audioUrl: metadata.audioUrl!,
+          savePath: savePath,
+          baseModel: baseModel,
+          controller: controller,
+          cancelToken: cancelToken as CancelToken?,
+        );
+      } else {
+        await _downloadWithRetry(
+          url: url,
+          savePath: savePath,
+          baseModel: baseModel,
+          controller: controller,
+          cancelToken: cancelToken as CancelToken?,
+          allowResume: existingSavePath != null,
+        );
+      }
 
       // ── Phase 3: Completed ────────────────────────────────
-      // Save metadata sidecar
       if (metadata is DownloadMetadata) {
         try {
           final file = File('$savePath.json');
-          await file.writeAsString(jsonEncode(DownloadMetadataModel.fromEntity(metadata).toJson()));
+          await file.writeAsString(
+              jsonEncode(DownloadMetadataModel.fromEntity(metadata).toJson()));
         } catch (_) {}
       }
 
-      // Get final file size
       int finalSize = 0;
       try {
         final savedFile = File(savePath);
@@ -206,7 +200,6 @@ class DownloaderRemoteDataSourceImpl implements DownloaderRemoteDataSource {
       );
     } on DioException catch (e) {
       if (e.type == DioExceptionType.cancel) {
-        // CRITICAL FIX: User-initiated cancel/pause — emit PAUSED state, NOT FAILED.
         controller.add(
           DownloadModel(
             id: id,
@@ -214,14 +207,16 @@ class DownloaderRemoteDataSourceImpl implements DownloaderRemoteDataSource {
             title: '',
             progress: 0,
             savePath: '',
-            status: DownloadStatus.paused, // Treat cancel token as Pause
+            status: DownloadStatus.paused,
           ),
         );
       } else {
+        final status = e.response?.statusCode;
+        final detail = e.response?.statusMessage ?? e.message ?? 'Network error';
         controller.addError(
           ServerException(
-            message: e.message ?? 'Download failed',
-            statusCode: e.response?.statusCode,
+            message: status != null ? 'HTTP $status — $detail' : detail,
+            statusCode: status,
           ),
         );
       }
@@ -232,9 +227,202 @@ class DownloaderRemoteDataSourceImpl implements DownloaderRemoteDataSource {
     }
   }
 
+  /// Performs a single-file download with up to [_maxRetries] attempts and
+  /// exponential backoff. Supports HTTP Range resume when [allowResume] is true.
+  Future<void> _downloadWithRetry({
+    required String url,
+    required String savePath,
+    required DownloadModel baseModel,
+    required StreamController<DownloadModel> controller,
+    required CancelToken? cancelToken,
+    required bool allowResume,
+  }) async {
+    DioException? lastError;
+    for (var attempt = 1; attempt <= _maxRetries; attempt++) {
+      try {
+        int startBytes = 0;
+        if (allowResume) {
+          final f = File(savePath);
+          if (f.existsSync()) startBytes = await f.length();
+        }
+
+        final headers = Map<String, String>.from(_youtubeHeaders);
+        if (startBytes > 0) headers['Range'] = 'bytes=$startBytes-';
+
+        await dio.download(
+          url,
+          savePath,
+          options: Options(
+            headers: headers,
+            // googlevideo can be slow to start; allow up to 60s receive
+            receiveTimeout: const Duration(seconds: 60),
+            responseType: ResponseType.bytes,
+          ),
+          cancelToken: cancelToken,
+          deleteOnError: false,
+          onReceiveProgress: (received, total) {
+            if (total > 0) {
+              final realTotal =
+                  startBytes > 0 && total != -1 ? total + startBytes : total;
+              final realReceived = received + startBytes;
+              controller.add(
+                baseModel.copyWith(
+                  progress: (realReceived / realTotal).clamp(0.0, 1.0),
+                  receivedBytes: realReceived,
+                  totalBytes: realTotal,
+                ),
+              );
+            } else {
+              controller.add(
+                baseModel.copyWith(
+                  receivedBytes: received + startBytes,
+                  totalBytes: 0,
+                ),
+              );
+            }
+          },
+        );
+        return; // success
+      } on DioException catch (e) {
+        // Never retry user-initiated cancellations.
+        if (e.type == DioExceptionType.cancel) rethrow;
+        lastError = e;
+        if (attempt < _maxRetries) {
+          // Exponential backoff: 1s, 2s, 4s
+          final delaySeconds = 1 << (attempt - 1);
+          await Future.delayed(Duration(seconds: delaySeconds));
+        }
+      }
+    }
+    throw lastError!;
+  }
+
+  /// Downloads video-only + audio-only streams and merges them with ffmpeg.
+  Future<void> _downloadAndMux({
+    required String videoUrl,
+    required String audioUrl,
+    required String savePath,
+    required DownloadModel baseModel,
+    required StreamController<DownloadModel> controller,
+    required CancelToken? cancelToken,
+  }) async {
+    final tmpDir = await getTemporaryDirectory();
+    final stamp = DateTime.now().millisecondsSinceEpoch;
+    final videoTmp = '${tmpDir.path}/mun_video_$stamp.tmp';
+    final audioTmp = '${tmpDir.path}/mun_audio_$stamp.tmp';
+
+    int videoReceived = 0, videoTotal = 0;
+    int audioReceived = 0, audioTotal = 0;
+
+    void emitCombined({DownloadStatus status = DownloadStatus.downloading}) {
+      final total = videoTotal + audioTotal;
+      final received = videoReceived + audioReceived;
+      final progress =
+          total > 0 ? (received / total).clamp(0.0, 1.0) : 0.0;
+      controller.add(
+        baseModel.copyWith(
+          status: status,
+          progress: progress,
+          receivedBytes: received,
+          totalBytes: total,
+        ),
+      );
+    }
+
+    try {
+      // Download video & audio sequentially so we don't saturate bandwidth and
+      // get more accurate progress reporting.
+      await _downloadWithRetryRaw(
+        url: videoUrl,
+        savePath: videoTmp,
+        cancelToken: cancelToken,
+        onProgress: (rcv, tot) {
+          videoReceived = rcv;
+          videoTotal = tot;
+          emitCombined();
+        },
+      );
+
+      await _downloadWithRetryRaw(
+        url: audioUrl,
+        savePath: audioTmp,
+        cancelToken: cancelToken,
+        onProgress: (rcv, tot) {
+          audioReceived = rcv;
+          audioTotal = tot;
+          emitCombined();
+        },
+      );
+
+      // Muxing phase — emit a "fetching"-style update so the UI shows activity.
+      controller.add(
+        baseModel.copyWith(
+          status: DownloadStatus.downloading,
+          progress: 0.98,
+          receivedBytes: videoReceived + audioReceived,
+          totalBytes: videoTotal + audioTotal,
+        ),
+      );
+
+      final cmd =
+          '-y -i "$videoTmp" -i "$audioTmp" -c:v copy -c:a aac -movflags +faststart "$savePath"';
+      final session = await FFmpegKit.execute(cmd);
+      final returnCode = await session.getReturnCode();
+      if (!ReturnCode.isSuccess(returnCode)) {
+        final logs = await session.getAllLogsAsString();
+        throw ServerException(
+          message: 'Failed to merge video and audio: ${(logs ?? '').split('\n').last}',
+        );
+      }
+    } finally {
+      // Clean up temp files regardless of success/failure.
+      for (final p in [videoTmp, audioTmp]) {
+        try {
+          final f = File(p);
+          if (f.existsSync()) await f.delete();
+        } catch (_) {}
+      }
+    }
+  }
+
+  /// Lower-level retry helper used by the mux pipeline. Does not emit
+  /// [DownloadModel]s itself — caller aggregates progress via [onProgress].
+  Future<void> _downloadWithRetryRaw({
+    required String url,
+    required String savePath,
+    required CancelToken? cancelToken,
+    required void Function(int received, int total) onProgress,
+  }) async {
+    DioException? lastError;
+    for (var attempt = 1; attempt <= _maxRetries; attempt++) {
+      try {
+        await dio.download(
+          url,
+          savePath,
+          options: Options(
+            headers: _youtubeHeaders,
+            receiveTimeout: const Duration(seconds: 60),
+            responseType: ResponseType.bytes,
+          ),
+          cancelToken: cancelToken,
+          deleteOnError: true,
+          onReceiveProgress: (rcv, tot) => onProgress(rcv, tot < 0 ? 0 : tot),
+        );
+        return;
+      } on DioException catch (e) {
+        if (e.type == DioExceptionType.cancel) rethrow;
+        lastError = e;
+        if (attempt < _maxRetries) {
+          final delaySeconds = 1 << (attempt - 1);
+          await Future.delayed(Duration(seconds: delaySeconds));
+        }
+      }
+    }
+    throw lastError!;
+  }
+
   /// Sanitizes a string for use as a file name.
   String _sanitizeFileName(String name) {
-    // Remove characters that are invalid in file names
     return name
         .replaceAll(RegExp(r'[\\/:*?"<>|]'), '')
         .replaceAll(RegExp(r'\s+'), ' ')
@@ -248,16 +436,14 @@ class DownloaderRemoteDataSourceImpl implements DownloaderRemoteDataSource {
       if (lower.contains('mp4') || lower.contains('m4a')) return 'm4a';
       if (lower.contains('webm') || lower.contains('opus')) return 'opus';
       if (lower.contains('ogg')) return 'ogg';
-      return 'mp3'; // Fallback to mp3 instead of m4a to avoid unplayable files
+      return 'mp3';
     }
     if (lower.contains('mp4')) return 'mp4';
     if (lower.contains('webm')) return 'webm';
     if (lower.contains('3gpp')) return '3gp';
-    return 'mp4'; // safe default for video
+    return 'mp4';
   }
 
-  /// Attempts a HEAD request to extract the file name from the
-  /// `content-disposition` header. Falls back to the URL's last path segment.
   Future<String> _resolveFileName(String url, {String? hintTitle}) async {
     try {
       final response = await dio.head(url);
@@ -271,7 +457,6 @@ class DownloaderRemoteDataSourceImpl implements DownloaderRemoteDataSource {
         }
       }
 
-      // Try to infer extension from content-type
       final contentType = response.headers.value('content-type');
       if (hintTitle != null && contentType != null) {
         final ext = _contentTypeToExtension(contentType);
@@ -279,17 +464,12 @@ class DownloaderRemoteDataSourceImpl implements DownloaderRemoteDataSource {
           return '${_sanitizeFileName(hintTitle)}.$ext';
         }
       }
-    } catch (_) {
-      // HEAD not supported or failed — fall through.
-    }
+    } catch (_) {}
 
-    // Derive from URL path.
     final uri = Uri.parse(url);
-    final lastSegment = uri.pathSegments.isNotEmpty
-        ? uri.pathSegments.last
-        : 'download';
+    final lastSegment =
+        uri.pathSegments.isNotEmpty ? uri.pathSegments.last : 'download';
 
-    // If the segment has an extension, use it; otherwise try to use hint title
     if (lastSegment.contains('.') && !lastSegment.endsWith('.bin')) {
       return lastSegment;
     }
@@ -301,7 +481,6 @@ class DownloaderRemoteDataSourceImpl implements DownloaderRemoteDataSource {
     return lastSegment.contains('.') ? lastSegment : '$lastSegment.mp4';
   }
 
-  /// Maps a content-type header to a file extension.
   String? _contentTypeToExtension(String contentType) {
     final lower = contentType.toLowerCase();
     if (lower.contains('video/mp4')) return 'mp4';
@@ -315,8 +494,6 @@ class DownloaderRemoteDataSourceImpl implements DownloaderRemoteDataSource {
     return null;
   }
 
-  /// Returns the absolute save path,
-  /// appending a numeric suffix to avoid overwriting existing files.
   Future<String> _buildSavePath(String fileName) async {
     final downloadsDirPath = await FileManager.downloadsPath;
     final downloadsDir = Directory(downloadsDirPath);
@@ -324,7 +501,6 @@ class DownloaderRemoteDataSourceImpl implements DownloaderRemoteDataSource {
     var file = File('${downloadsDir.path}/$fileName');
     var counter = 1;
 
-    // Avoid collisions: file.mp4 → file (1).mp4 → file (2).mp4 …
     while (file.existsSync()) {
       final dot = fileName.lastIndexOf('.');
       final name = dot != -1 ? fileName.substring(0, dot) : fileName;

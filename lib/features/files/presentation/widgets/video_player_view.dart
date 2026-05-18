@@ -1,13 +1,18 @@
 import 'dart:io';
 
-import 'package:audio_session/audio_session.dart'; // مكتبة التشغيل بالخلفية
-import 'package:chewie/chewie.dart';
+import 'package:audio_session/audio_session.dart';
 import 'package:flutter/material.dart';
-import 'package:video_player/video_player.dart';
+import 'package:media_kit/media_kit.dart';
+import 'package:media_kit_video/media_kit_video.dart';
 
 import '../../../../core/themes/app_theme.dart';
 import '../../../../core/utils/file_manager.dart';
 
+/// Plays downloaded video or audio using media_kit (libmpv).
+///
+/// - Verifies the file exists before initializing.
+/// - Waits for metadata (duration) before showing controls.
+/// - Uses media_kit's modern built-in MaterialVideoControls.
 class VideoPlayerView extends StatefulWidget {
   final DownloadedFileInfo file;
 
@@ -18,9 +23,12 @@ class VideoPlayerView extends StatefulWidget {
 }
 
 class _VideoPlayerViewState extends State<VideoPlayerView> {
-  late VideoPlayerController _videoController;
-  ChewieController? _chewieController;
+  late final Player _player;
+  VideoController? _controller;
+
   bool _hasError = false;
+  String _errorMessage = 'Unable to play this file';
+  bool _ready = false;
 
   @override
   void initState() {
@@ -30,63 +38,71 @@ class _VideoPlayerViewState extends State<VideoPlayerView> {
 
   Future<void> _initPlayer() async {
     try {
-      // 🚀 إعداد جلسة الصوت للعمل بالخلفية (Background Audio)
+      // 1. Verify file exists and is not empty
+      final f = File(widget.file.path);
+      if (!f.existsSync()) {
+        _setError('File not found');
+        return;
+      }
+      final length = await f.length();
+      if (length == 0) {
+        _setError('File is empty');
+        return;
+      }
+
+      // 2. Configure audio session for background playback
       final session = await AudioSession.instance;
       await session.configure(const AudioSessionConfiguration.music());
 
-      _videoController = VideoPlayerController.file(File(widget.file.path));
-      await _videoController.initialize();
+      // 3. Create player and controller
+      _player = Player();
+      _controller = VideoController(_player);
 
-      _chewieController = ChewieController(
-        videoPlayerController: _videoController,
-        autoPlay: true,
-        looping: false,
-        allowFullScreen: widget.file.isVideo,
-        allowedScreenSleep: false, // يمنع إغلاق الشاشة أثناء التشغيل
-        allowMuting: true,
-        showControlsOnInitialize: true,
-        // إعدادات PiP مدعومة في بعض الأجهزة
-        allowPlaybackSpeedChanging: true,
-        materialProgressColors: ChewieProgressColors(
-          playedColor: AppTheme.neonCyan,
-          handleColor: AppTheme.neonPurple,
-          backgroundColor: Colors.white12,
-          bufferedColor: AppTheme.neonPurple.withAlpha(60),
-        ),
+      // 4. Open media
+      await _player.open(Media(widget.file.path));
+
+      // 5. Wait until we have a valid duration (metadata loaded)
+      await _player.stream.duration.firstWhere(
+        (d) => d.inMilliseconds > 0,
       );
 
-      if (mounted) setState(() {});
+      if (mounted) setState(() => _ready = true);
     } catch (e) {
-      if (mounted) setState(() => _hasError = true);
+      _setError(e.toString());
+    }
+  }
+
+  void _setError(String msg) {
+    if (mounted) {
+      setState(() {
+        _hasError = true;
+        _errorMessage = msg;
+      });
     }
   }
 
   @override
   void dispose() {
-    _chewieController?.dispose();
-    _videoController.dispose();
+    _player.dispose();
     super.dispose();
   }
 
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      backgroundColor: Colors.black, // خلفية سينمائية
+      backgroundColor: Colors.black,
       appBar: AppBar(
         backgroundColor: Colors.transparent,
         elevation: 0,
         leading: IconButton(
-          icon: const Icon(
-            Icons.arrow_back_ios_new_rounded,
-            color: Colors.white,
-          ),
+          icon: const Icon(Icons.arrow_back_ios_new_rounded, color: Colors.white),
           onPressed: () => Navigator.pop(context),
         ),
         title: Text(
           widget.file.displayTitle,
           style: const TextStyle(
             color: Colors.white,
-            fontSize: 16,
+            fontSize: 14,
             fontWeight: FontWeight.w600,
           ),
           maxLines: 1,
@@ -97,9 +113,7 @@ class _VideoPlayerViewState extends State<VideoPlayerView> {
             widget.file.isVideo
                 ? Icons.videocam_rounded
                 : Icons.audiotrack_rounded,
-            color: widget.file.isVideo
-                ? AppTheme.neonPurple
-                : AppTheme.neonCyan,
+            color: widget.file.isVideo ? AppTheme.neonPurple : AppTheme.neonCyan,
           ),
           const SizedBox(width: 16),
         ],
@@ -116,14 +130,15 @@ class _VideoPlayerViewState extends State<VideoPlayerView> {
           Icon(
             Icons.error_outline_rounded,
             color: Colors.redAccent.withAlpha(180),
-            size: 56,
+            size: 48,
           ),
-          const SizedBox(height: 16),
-          const Text(
-            'Unable to play this file',
-            style: TextStyle(
+          const SizedBox(height: 12),
+          Text(
+            _errorMessage,
+            textAlign: TextAlign.center,
+            style: const TextStyle(
               color: Colors.white70,
-              fontSize: 16,
+              fontSize: 14,
               fontWeight: FontWeight.w500,
             ),
           ),
@@ -131,41 +146,42 @@ class _VideoPlayerViewState extends State<VideoPlayerView> {
       );
     }
 
-    if (_chewieController == null) {
+    if (!_ready || _controller == null) {
       return Column(
         mainAxisSize: MainAxisSize.min,
         children: [
           SizedBox(
-            width: 48,
-            height: 48,
+            width: 36,
+            height: 36,
             child: CircularProgressIndicator(
               strokeWidth: 3,
-              valueColor: AlwaysStoppedAnimation(
-                AppTheme.neonCyan.withAlpha(200),
-              ),
+              valueColor:
+                  AlwaysStoppedAnimation(AppTheme.neonCyan.withAlpha(200)),
             ),
           ),
-          const SizedBox(height: 20),
+          const SizedBox(height: 16),
           const Text(
             'Preparing player…',
-            style: TextStyle(color: Colors.white54, fontSize: 14),
+            style: TextStyle(color: Colors.white54, fontSize: 13),
           ),
         ],
       );
     }
 
-    final aspectRatio = widget.file.isVideo
-        ? _videoController.value.aspectRatio
-        : 1.0;
-
-    Widget player = Chewie(controller: _chewieController!);
-
-    if (widget.file.isVideo) {
-      player = AspectRatio(aspectRatio: aspectRatio, child: player);
-    } else {
-      player = SizedBox(height: 200, child: player);
-    }
-
-    return player;
+    return widget.file.isVideo
+        ? AspectRatio(
+            aspectRatio: 16 / 9,
+            child: Video(
+              controller: _controller!,
+              controls: AdaptiveVideoControls,
+            ),
+          )
+        : SizedBox(
+            height: 220,
+            child: Video(
+              controller: _controller!,
+              controls: AdaptiveVideoControls,
+            ),
+          );
   }
 }

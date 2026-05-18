@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:media_kit/media_kit.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
 import 'core/themes/app_theme.dart';
@@ -9,15 +10,40 @@ import 'injection_container.dart' as di;
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
 
+  // Initialize media_kit (libmpv-based player)
+  MediaKit.ensureInitialized();
+
   // Initialize dependency injection
   await di.init();
 
-  // Load persisted theme preference
+  // Load persisted theme preference (with one-time migration from legacy 'dark_mode' bool)
   final prefs = await SharedPreferences.getInstance();
-  final isDark = prefs.getBool('dark_mode') ?? true;
+  ThemeMode initialMode;
+  final stored = prefs.getString('theme_mode');
+  if (stored != null) {
+    initialMode = _parseThemeMode(stored);
+  } else if (prefs.containsKey('dark_mode')) {
+    final isDark = prefs.getBool('dark_mode') ?? true;
+    initialMode = isDark ? ThemeMode.dark : ThemeMode.light;
+    await prefs.setString('theme_mode', _themeModeToString(initialMode));
+  } else {
+    initialMode = ThemeMode.system;
+  }
 
-  runApp(MunDownApp(initialThemeMode: isDark ? ThemeMode.dark : ThemeMode.light));
+  runApp(MunDownApp(initialThemeMode: initialMode));
 }
+
+String _themeModeToString(ThemeMode mode) => switch (mode) {
+      ThemeMode.dark => 'dark',
+      ThemeMode.light => 'light',
+      ThemeMode.system => 'system',
+    };
+
+ThemeMode _parseThemeMode(String value) => switch (value) {
+      'dark' => ThemeMode.dark,
+      'light' => ThemeMode.light,
+      _ => ThemeMode.system,
+    };
 
 class MunDownApp extends StatefulWidget {
   final ThemeMode initialThemeMode;
@@ -52,30 +78,27 @@ class MunDownAppState extends State<MunDownApp> with WidgetsBindingObserver {
   @override
   void didChangeAppLifecycleState(AppLifecycleState state) {
     if (state == AppLifecycleState.detached) {
-      // App is being terminated, dispose resources
       di.sl<YouTubeExtractor>().dispose();
     }
     super.didChangeAppLifecycleState(state);
   }
 
-  bool get isDarkMode => _themeMode == ThemeMode.dark;
+  ThemeMode get themeMode => _themeMode;
 
-  /// Toggles between dark and light mode and persists the choice.
-  Future<void> toggleTheme() async {
-    final newMode =
-        _themeMode == ThemeMode.dark ? ThemeMode.light : ThemeMode.dark;
-    setState(() => _themeMode = newMode);
-
-    final prefs = await SharedPreferences.getInstance();
-    await prefs.setBool('dark_mode', newMode == ThemeMode.dark);
+  bool get isDarkMode {
+    if (_themeMode == ThemeMode.system) {
+      final brightness =
+          WidgetsBinding.instance.platformDispatcher.platformBrightness;
+      return brightness == Brightness.dark;
+    }
+    return _themeMode == ThemeMode.dark;
   }
 
   /// Sets a specific theme mode and persists the choice.
   Future<void> setThemeMode(ThemeMode mode) async {
     setState(() => _themeMode = mode);
-
     final prefs = await SharedPreferences.getInstance();
-    await prefs.setBool('dark_mode', mode == ThemeMode.dark);
+    await prefs.setString('theme_mode', _themeModeToString(mode));
   }
 
   @override

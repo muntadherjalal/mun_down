@@ -2,7 +2,7 @@ import 'dart:io';
 
 import 'package:flutter/material.dart';
 import 'package:path_provider/path_provider.dart';
-import 'package:shared_preferences/shared_preferences.dart'; // ضفنا هاي المكتبة للحفظ
+import 'package:shared_preferences/shared_preferences.dart';
 import 'package:webview_flutter/webview_flutter.dart';
 
 import '../../../../core/themes/app_theme.dart';
@@ -22,22 +22,21 @@ class _SettingsPageState extends State<SettingsPage> {
   bool _autoPasteUrl = true;
   bool _wifiOnly = false;
   bool _compactList = false;
-  bool _pipEnabled = true; // متغير الـ PiP الجديد
+  bool _pipEnabled = true;
 
   @override
   void initState() {
     super.initState();
     _loadPaths();
     _calculateCache();
-    _loadPreferences(); // تحميل الإعدادات المحفوظة
+    _loadPreferences();
   }
 
-  // دالة تحميل تفضيلات المستخدم
   Future<void> _loadPreferences() async {
     final prefs = await SharedPreferences.getInstance();
     if (mounted) {
       setState(() {
-        _pipEnabled = prefs.getBool('pip_enabled') ?? true; // الافتراضي شغال
+        _pipEnabled = prefs.getBool('pip_enabled') ?? true;
         _autoPasteUrl = prefs.getBool('auto_paste') ?? true;
         _wifiOnly = prefs.getBool('wifi_only') ?? false;
         _compactList = prefs.getBool('compact_list') ?? false;
@@ -45,7 +44,6 @@ class _SettingsPageState extends State<SettingsPage> {
     }
   }
 
-  // دالة حفظ حالة الـ PiP
   Future<void> _togglePip(bool value) async {
     setState(() => _pipEnabled = value);
     final prefs = await SharedPreferences.getInstance();
@@ -89,7 +87,6 @@ class _SettingsPageState extends State<SettingsPage> {
 
   Future<void> _clearCache() async {
     try {
-      // Clear app temporary directory
       final tempDir = await getTemporaryDirectory();
       if (tempDir.existsSync()) {
         await for (final entity in tempDir.list(
@@ -101,12 +98,9 @@ class _SettingsPageState extends State<SettingsPage> {
           }
         }
       }
-
-      // Clear WebView cookies/cache
       try {
         await WebViewCookieManager().clearCookies();
       } catch (_) {}
-
       await _calculateCache();
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
@@ -123,11 +117,95 @@ class _SettingsPageState extends State<SettingsPage> {
     } catch (_) {}
   }
 
+  // ── Theme selector bottom sheet ───────────────────────────
+
+  void _showThemeSelector(BuildContext context) {
+    final appState = MunDownApp.of(context);
+    final currentMode = appState?.themeMode ?? ThemeMode.system;
+
+    showModalBottomSheet(
+      context: context,
+      backgroundColor: Colors.transparent,
+      builder: (ctx) => Container(
+        decoration: const BoxDecoration(
+          color: AppTheme.kDeepBg,
+          borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
+        ),
+        padding: const EdgeInsets.fromLTRB(20, 16, 20, 32),
+        child: SafeArea(
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Center(
+                child: Container(
+                  width: 40,
+                  height: 4,
+                  decoration: BoxDecoration(
+                    color: Colors.white24,
+                    borderRadius: BorderRadius.circular(2),
+                  ),
+                ),
+              ),
+              const SizedBox(height: 16),
+              const Text(
+                'Choose Theme',
+                style: TextStyle(
+                  color: Colors.white,
+                  fontSize: 18,
+                  fontWeight: FontWeight.w700,
+                ),
+              ),
+              const SizedBox(height: 16),
+              _ThemeOption(
+                icon: Icons.dark_mode_rounded,
+                label: 'Dark Mode',
+                isSelected: currentMode == ThemeMode.dark,
+                onTap: () {
+                  appState?.setThemeMode(ThemeMode.dark);
+                  Navigator.pop(ctx);
+                },
+              ),
+              const SizedBox(height: 8),
+              _ThemeOption(
+                icon: Icons.light_mode_rounded,
+                label: 'Light Mode',
+                isSelected: currentMode == ThemeMode.light,
+                onTap: () {
+                  appState?.setThemeMode(ThemeMode.light);
+                  Navigator.pop(ctx);
+                },
+              ),
+              const SizedBox(height: 8),
+              _ThemeOption(
+                icon: Icons.phone_android_rounded,
+                label: 'System Default',
+                isSelected: currentMode == ThemeMode.system,
+                onTap: () {
+                  appState?.setThemeMode(ThemeMode.system);
+                  Navigator.pop(ctx);
+                },
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+
+  String _themeSubtitle(ThemeMode? mode) {
+    return switch (mode) {
+      ThemeMode.dark => 'Dark theme active',
+      ThemeMode.light => 'Light theme active',
+      ThemeMode.system => 'Follows device theme',
+      null => 'Follows device theme',
+    };
+  }
+
   @override
   Widget build(BuildContext context) {
-    // Read current theme mode from the app state
     final appState = MunDownApp.of(context);
-    final isDark = appState?.isDarkMode ?? true;
+    final currentMode = appState?.themeMode ?? ThemeMode.system;
 
     return Scaffold(
       backgroundColor: AppTheme.kDeepBg,
@@ -174,7 +252,6 @@ class _SettingsPageState extends State<SettingsPage> {
                   const SizedBox(height: 20),
 
                   _SectionTitle(title: 'Player & Appearance'),
-                  // 🚀 زر الـ PiP انضاف هنا
                   _SettingsSwitch(
                     icon: Icons.picture_in_picture_alt_rounded,
                     title: 'Picture-in-Picture (PiP)',
@@ -182,16 +259,11 @@ class _SettingsPageState extends State<SettingsPage> {
                     value: _pipEnabled,
                     onChanged: _togglePip,
                   ),
-                  _SettingsSwitch(
-                    icon: isDark
-                        ? Icons.dark_mode_rounded
-                        : Icons.light_mode_rounded,
-                    title: 'Dark Mode',
-                    subtitle: isDark
-                        ? 'Dark theme active'
-                        : 'Light theme active',
-                    value: isDark,
-                    onChanged: (_) => appState?.toggleTheme(),
+                  _SettingsTile(
+                    icon: Icons.palette_outlined,
+                    title: 'Theme',
+                    subtitle: _themeSubtitle(currentMode),
+                    onTap: () => _showThemeSelector(context),
                   ),
                   _SettingsSwitch(
                     icon: Icons.view_headline_rounded,
@@ -212,12 +284,6 @@ class _SettingsPageState extends State<SettingsPage> {
                     title: 'Clear Cache',
                     subtitle: _cacheSize,
                     onTap: () => _showClearCacheDialog(context),
-                  ),
-                  _SettingsTile(
-                    icon: Icons.delete_sweep_outlined,
-                    title: 'Clear Download History',
-                    subtitle: 'Remove all history records',
-                    onTap: () {},
                   ),
                   const SizedBox(height: 20),
 
@@ -280,7 +346,7 @@ class _SettingsPageState extends State<SettingsPage> {
 
   Widget _buildHeader() {
     return Container(
-      padding: const EdgeInsets.fromLTRB(20, 16, 12, 12),
+      padding: const EdgeInsets.fromLTRB(16, 10, 12, 10),
       color: AppTheme.kDeepBg,
       child: Row(
         children: [
@@ -291,15 +357,15 @@ class _SettingsPageState extends State<SettingsPage> {
             child: const Icon(
               Icons.settings_rounded,
               color: Colors.white,
-              size: 24,
+              size: 20,
             ),
           ),
-          const SizedBox(width: 10),
+          const SizedBox(width: 8),
           const Text(
             'Settings',
             style: TextStyle(
               color: Colors.white,
-              fontSize: 20,
+              fontSize: 16,
               fontWeight: FontWeight.w700,
             ),
           ),
@@ -494,6 +560,63 @@ class _SettingsSwitch extends StatelessWidget {
                 ),
               ],
             ),
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+class _ThemeOption extends StatelessWidget {
+  final IconData icon;
+  final String label;
+  final bool isSelected;
+  final VoidCallback onTap;
+
+  const _ThemeOption({
+    required this.icon,
+    required this.label,
+    required this.isSelected,
+    required this.onTap,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return Material(
+      color: isSelected ? AppTheme.neonCyan.withAlpha(20) : AppTheme.kSurface,
+      borderRadius: BorderRadius.circular(14),
+      child: InkWell(
+        borderRadius: BorderRadius.circular(14),
+        onTap: onTap,
+        child: Container(
+          decoration: BoxDecoration(
+            borderRadius: BorderRadius.circular(14),
+            border: Border.all(
+              color: isSelected ? AppTheme.neonCyan : Colors.transparent,
+              width: 1.5,
+            ),
+          ),
+          padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
+          child: Row(
+            children: [
+              Icon(icon, color: AppTheme.neonPurple, size: 22),
+              const SizedBox(width: 14),
+              Expanded(
+                child: Text(
+                  label,
+                  style: TextStyle(
+                    color: isSelected ? Colors.white : Colors.white.withAlpha(220),
+                    fontSize: 15,
+                    fontWeight: isSelected ? FontWeight.w600 : FontWeight.w500,
+                  ),
+                ),
+              ),
+              if (isSelected)
+                Icon(Icons.check_circle_rounded,
+                    color: AppTheme.neonCyan, size: 22)
+              else
+                const SizedBox(width: 22),
+            ],
           ),
         ),
       ),

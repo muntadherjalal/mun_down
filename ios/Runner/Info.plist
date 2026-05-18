@@ -43,6 +43,13 @@
 	<key>NSFaceIDUsageDescription</key>
 	<string>MunDown uses Face ID to protect your private vault files.</string>
 
+	<!-- ── App Transport Security ─────────────────────────── -->
+	<key>NSAppTransportSecurity</key>
+	<dict>
+		<key>NSAllowsArbitraryLoads</key>
+		<true/>
+	</dict>
+
 	<key>UIApplicationSceneManifest</key>
 	<dict>
 		<key>UIApplicationSupportsMultipleScenes</key>
