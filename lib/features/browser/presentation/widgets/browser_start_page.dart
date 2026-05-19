@@ -14,54 +14,62 @@ class BrowserStartPage extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Container(
-      color: AppTheme.kDeepBg,
+      color: AppTheme.background(context),
       width: double.infinity,
       height: double.infinity,
       padding: const EdgeInsets.symmetric(horizontal: 24),
       child: Column(
         mainAxisAlignment: MainAxisAlignment.center,
         children: [
-          const Text(
+          Text(
             'What do you want to download?',
             style: TextStyle(
-              color: Colors.white,
+              color: AppTheme.onSurface(context),
               fontSize: 20,
               fontWeight: FontWeight.w600,
             ),
           ),
           const SizedBox(height: 24),
-          Container(
-            height: 56,
-            decoration: BoxDecoration(
-              color: AppTheme.kSurface,
-              borderRadius: BorderRadius.circular(16),
-              border: Border.all(color: AppTheme.neonCyan.withAlpha(80)),
-              boxShadow: [
-                BoxShadow(
-                  color: AppTheme.neonCyan.withAlpha(20),
-                  blurRadius: 24,
-                  offset: const Offset(0, 8),
-                ),
-              ],
-            ),
-            child: TextField(
-              controller: urlBarController,
-              decoration: const InputDecoration(
-                hintText: 'Search or enter URL...',
-                hintStyle: TextStyle(color: AppTheme.kTextDim, fontSize: 15),
-                prefixIcon: Icon(
-                  Icons.search_rounded,
-                  color: AppTheme.neonCyan,
-                ),
-                border: InputBorder.none,
-                contentPadding: EdgeInsets.symmetric(
-                  horizontal: 20,
-                  vertical: 18,
-                ),
+          Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 16),
+            child: Container(
+              decoration: BoxDecoration(
+                color: AppTheme.surface(context),
+                borderRadius: BorderRadius.circular(12),
+                border: Border.all(color: AppTheme.neonCyan.withAlpha(80)),
+                boxShadow: [
+                  BoxShadow(
+                    color: AppTheme.neonCyan.withAlpha(20),
+                    blurRadius: 24,
+                    offset: const Offset(0, 8),
+                  ),
+                ],
               ),
-              style: const TextStyle(color: Colors.white, fontSize: 16),
-              textInputAction: TextInputAction.go,
-              onSubmitted: onNavigate,
+              child: TextField(
+                controller: urlBarController,
+                decoration: InputDecoration(
+                  hintText: 'Search or enter URL...',
+                  hintStyle: TextStyle(
+                    color: AppTheme.dimText(context),
+                    fontSize: 15,
+                  ),
+                  prefixIcon: const Icon(
+                    Icons.search_rounded,
+                    color: AppTheme.neonCyan,
+                  ),
+                  border: InputBorder.none,
+                  contentPadding: const EdgeInsets.symmetric(
+                    horizontal: 16,
+                    vertical: 14,
+                  ),
+                ),
+                style: TextStyle(
+                  color: AppTheme.onSurface(context),
+                  fontSize: 16,
+                ),
+                textInputAction: TextInputAction.go,
+                onSubmitted: onNavigate,
+              ),
             ),
           ),
           const SizedBox(height: 48),
@@ -77,7 +85,7 @@ class BrowserStartPage extends StatelessWidget {
               _ShortcutTile(
                 icon: Icons.music_note_rounded,
                 label: 'TikTok',
-                color: Colors.white,
+                color: AppTheme.onSurface(context),
                 onTap: () => onNavigate('https://www.tiktok.com'),
               ),
             ],
@@ -123,7 +131,7 @@ class _ShortcutTile extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Material(
-      color: AppTheme.kSurface,
+      color: AppTheme.surface(context),
       borderRadius: BorderRadius.circular(16),
       child: InkWell(
         borderRadius: BorderRadius.circular(16),
@@ -138,8 +146,8 @@ class _ShortcutTile extends StatelessWidget {
               const SizedBox(height: 12),
               Text(
                 label,
-                style: const TextStyle(
-                  color: Colors.white,
+                style: TextStyle(
+                  color: AppTheme.onSurface(context),
                   fontSize: 14,
                   fontWeight: FontWeight.w600,
                 ),

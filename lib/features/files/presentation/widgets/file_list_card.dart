@@ -41,7 +41,7 @@ class FileListCard extends StatelessWidget {
 
     return Container(
       decoration: BoxDecoration(
-        color: AppTheme.kGlassWhite,
+        color: AppTheme.glass(context),
         borderRadius: BorderRadius.circular(16),
         border: Border.all(color: accentColor.withAlpha(isLocked ? 50 : 25)),
       ),
@@ -97,8 +97,8 @@ class FileListCard extends StatelessWidget {
                     children: [
                       Text(
                         file.displayTitle,
-                        style: const TextStyle(
-                          color: Colors.white,
+                        style: TextStyle(
+                          color: AppTheme.onSurface(context),
                           fontSize: 14,
                           fontWeight: FontWeight.w600,
                         ),
@@ -110,8 +110,8 @@ class FileListCard extends StatelessWidget {
                           padding: const EdgeInsets.only(top: 2, bottom: 2),
                           child: Text(
                             file.displayAuthor,
-                            style: const TextStyle(
-                              color: AppTheme.kTextDim,
+                            style: TextStyle(
+                              color: AppTheme.dimText(context),
                               fontSize: 12,
                             ),
                             maxLines: 1,
@@ -135,7 +135,7 @@ class FileListCard extends StatelessWidget {
                             const SizedBox(width: 8),
                             MetaChip(
                               text: file.displayDuration!,
-                              color: Colors.white54,
+                              color: AppTheme.onSurface(context).withAlpha(138),
                             ),
                           ],
                           if (isLocked) ...[
@@ -153,12 +153,12 @@ class FileListCard extends StatelessWidget {
                 ),
                 // Action menu
                 PopupMenuButton<String>(
-                  icon: const Icon(
+                  icon: Icon(
                     Icons.more_vert_rounded,
-                    color: Colors.white54,
+                    color: AppTheme.onSurface(context).withAlpha(138),
                     size: 20,
                   ),
-                  color: AppTheme.kSurface,
+                  color: AppTheme.surface(context),
                   shape: RoundedRectangleBorder(
                     borderRadius: BorderRadius.circular(12),
                   ),
@@ -181,22 +181,22 @@ class FileListCard extends StatelessWidget {
                           const SizedBox(width: 10),
                           Text(
                             file.isVideo ? 'Play Video' : 'Play Audio',
-                            style: const TextStyle(color: Colors.white),
+                            style: TextStyle(color: AppTheme.onSurface(context)),
                           ),
                         ],
                       ),
                     ),
                     PopupMenuItem(
                       value: 'share',
-                      child: const Row(
+                      child: Row(
                         children: [
-                          Icon(
+                          const Icon(
                             Icons.share_rounded,
                             color: AppTheme.neonPurple,
                             size: 18,
                           ),
-                          SizedBox(width: 10),
-                          Text('Share', style: TextStyle(color: Colors.white)),
+                          const SizedBox(width: 10),
+                          Text('Share', style: TextStyle(color: AppTheme.onSurface(context))),
                         ],
                       ),
                     ),
@@ -214,7 +214,7 @@ class FileListCard extends StatelessWidget {
                           const SizedBox(width: 10),
                           Text(
                             isLocked ? 'Unlock File' : 'Move to Vault',
-                            style: const TextStyle(color: Colors.white),
+                            style: TextStyle(color: AppTheme.onSurface(context)),
                           ),
                         ],
                       ),
@@ -230,7 +230,7 @@ class FileListCard extends StatelessWidget {
                             size: 18,
                           ),
                           const SizedBox(width: 10),
-                          const Text(
+                          Text(
                             'Delete',
                             style: TextStyle(color: AppTheme.kErrorRed),
                           ),

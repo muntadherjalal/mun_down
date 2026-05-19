@@ -23,6 +23,31 @@ class AppTheme {
   static const Color _onPrimary      = Colors.white;
   static const Color _onSurface      = Color(0xFFE0E0E0);
 
+  // ── Theme-aware helpers ─────────────────────────────────
+  static Color surface(BuildContext context) =>
+      Theme.of(context).colorScheme.surface;
+
+  static Color background(BuildContext context) =>
+      Theme.of(context).scaffoldBackgroundColor;
+
+  static Color onSurface(BuildContext context) =>
+      Theme.of(context).colorScheme.onSurface;
+
+  static Color dimText(BuildContext context) =>
+      Theme.of(context).colorScheme.onSurface.withAlpha(153);
+
+  static Color glass(BuildContext context) =>
+      Theme.of(context).colorScheme.onSurface.withAlpha(20);
+
+  static Color divider(BuildContext context) =>
+      Theme.of(context).colorScheme.onSurface.withAlpha(20);
+
+  static Color disabled(BuildContext context) =>
+      Theme.of(context).colorScheme.onSurface.withAlpha(100);
+
+  static bool isDark(BuildContext context) =>
+      Theme.of(context).brightness == Brightness.dark;
+
   // ── Dark Theme ───────────────────────────────────────────
   static ThemeData get darkTheme {
     return ThemeData(

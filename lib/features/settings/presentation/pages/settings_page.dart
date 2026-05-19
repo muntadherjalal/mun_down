@@ -6,7 +6,6 @@ import 'package:shared_preferences/shared_preferences.dart';
 import 'package:webview_flutter/webview_flutter.dart';
 
 import '../../../../core/themes/app_theme.dart';
-import '../../../../core/utils/file_manager.dart';
 import '../../../../main.dart';
 
 class SettingsPage extends StatefulWidget {
@@ -16,7 +15,6 @@ class SettingsPage extends StatefulWidget {
 }
 
 class _SettingsPageState extends State<SettingsPage> {
-  String _storagePath = 'Loading...';
   String _cacheSize = 'Calculating...';
 
   bool _autoPasteUrl = true;
@@ -27,7 +25,6 @@ class _SettingsPageState extends State<SettingsPage> {
   @override
   void initState() {
     super.initState();
-    _loadPaths();
     _calculateCache();
     _loadPreferences();
   }
@@ -48,11 +45,6 @@ class _SettingsPageState extends State<SettingsPage> {
     setState(() => _pipEnabled = value);
     final prefs = await SharedPreferences.getInstance();
     await prefs.setBool('pip_enabled', value);
-  }
-
-  Future<void> _loadPaths() async {
-    final path = await FileManager.downloadsPath;
-    if (mounted) setState(() => _storagePath = path);
   }
 
   Future<void> _calculateCache() async {
@@ -104,8 +96,8 @@ class _SettingsPageState extends State<SettingsPage> {
       await _calculateCache();
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(
-            backgroundColor: AppTheme.kSurface,
+          SnackBar(
+            backgroundColor: AppTheme.surface(context),
             behavior: SnackBarBehavior.floating,
             content: Text(
               'Cache cleared successfully',
@@ -127,9 +119,9 @@ class _SettingsPageState extends State<SettingsPage> {
       context: context,
       backgroundColor: Colors.transparent,
       builder: (ctx) => Container(
-        decoration: const BoxDecoration(
-          color: AppTheme.kDeepBg,
-          borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
+        decoration: BoxDecoration(
+          color: AppTheme.background(ctx),
+          borderRadius: const BorderRadius.vertical(top: Radius.circular(24)),
         ),
         padding: const EdgeInsets.fromLTRB(20, 16, 20, 32),
         child: SafeArea(
@@ -142,16 +134,16 @@ class _SettingsPageState extends State<SettingsPage> {
                   width: 40,
                   height: 4,
                   decoration: BoxDecoration(
-                    color: Colors.white24,
+                    color: AppTheme.onSurface(ctx).withAlpha(40),
                     borderRadius: BorderRadius.circular(2),
                   ),
                 ),
               ),
               const SizedBox(height: 16),
-              const Text(
+              Text(
                 'Choose Theme',
                 style: TextStyle(
-                  color: Colors.white,
+                  color: AppTheme.onSurface(ctx),
                   fontSize: 18,
                   fontWeight: FontWeight.w700,
                 ),
@@ -208,7 +200,6 @@ class _SettingsPageState extends State<SettingsPage> {
     final currentMode = appState?.themeMode ?? ThemeMode.system;
 
     return Scaffold(
-      backgroundColor: AppTheme.kDeepBg,
       body: SafeArea(
         child: Column(
           children: [
@@ -221,12 +212,6 @@ class _SettingsPageState extends State<SettingsPage> {
                 ),
                 children: [
                   _SectionTitle(title: 'General'),
-                  _SettingsTile(
-                    icon: Icons.folder_outlined,
-                    title: 'Storage Location',
-                    subtitle: _storagePath,
-                    onTap: () {},
-                  ),
                   _SettingsSwitch(
                     icon: Icons.content_paste_rounded,
                     title: 'Auto-paste URL',
@@ -300,8 +285,8 @@ class _SettingsPageState extends State<SettingsPage> {
                     subtitle: 'github.com/MunDown',
                     onTap: () {
                       ScaffoldMessenger.of(context).showSnackBar(
-                        const SnackBar(
-                          backgroundColor: AppTheme.kSurface,
+                        SnackBar(
+                          backgroundColor: AppTheme.surface(context),
                           behavior: SnackBarBehavior.floating,
                           content: Text(
                             'Not implemented in MVP',
@@ -320,8 +305,8 @@ class _SettingsPageState extends State<SettingsPage> {
                     subtitle: 'Love MunDown? Let us know!',
                     onTap: () {
                       ScaffoldMessenger.of(context).showSnackBar(
-                        const SnackBar(
-                          backgroundColor: AppTheme.kSurface,
+                        SnackBar(
+                          backgroundColor: AppTheme.surface(context),
                           behavior: SnackBarBehavior.floating,
                           content: Text(
                             'Thank you!',
@@ -347,24 +332,23 @@ class _SettingsPageState extends State<SettingsPage> {
   Widget _buildHeader() {
     return Container(
       padding: const EdgeInsets.fromLTRB(16, 10, 12, 10),
-      color: AppTheme.kDeepBg,
       child: Row(
         children: [
           ShaderMask(
             shaderCallback: (rect) => const LinearGradient(
               colors: [AppTheme.neonPurple, AppTheme.neonCyan],
             ).createShader(rect),
-            child: const Icon(
+            child: Icon(
               Icons.settings_rounded,
-              color: Colors.white,
+              color: AppTheme.onSurface(context),
               size: 20,
             ),
           ),
           const SizedBox(width: 8),
-          const Text(
+          Text(
             'Settings',
             style: TextStyle(
-              color: Colors.white,
+              color: AppTheme.onSurface(context),
               fontSize: 16,
               fontWeight: FontWeight.w700,
             ),
@@ -378,22 +362,22 @@ class _SettingsPageState extends State<SettingsPage> {
     showDialog(
       context: context,
       builder: (_) => AlertDialog(
-        backgroundColor: AppTheme.kSurface,
+        backgroundColor: AppTheme.surface(context),
         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
-        title: const Text(
+        title: Text(
           'Clear Cache',
-          style: TextStyle(color: Colors.white, fontWeight: FontWeight.w600),
+          style: TextStyle(color: AppTheme.onSurface(context), fontWeight: FontWeight.w600),
         ),
-        content: const Text(
+        content: Text(
           'This will remove all temporary files and WebView cookies.',
-          style: TextStyle(color: AppTheme.kTextDim),
+          style: TextStyle(color: AppTheme.dimText(context)),
         ),
         actions: [
           TextButton(
             onPressed: () => Navigator.pop(context),
-            child: const Text(
+            child: Text(
               'Cancel',
-              style: TextStyle(color: AppTheme.kTextDim),
+              style: TextStyle(color: AppTheme.dimText(context)),
             ),
           ),
           TextButton(
@@ -449,7 +433,7 @@ class _SettingsTile extends StatelessWidget {
     return Padding(
       padding: const EdgeInsets.only(bottom: 6),
       child: Material(
-        color: AppTheme.kGlassWhite,
+        color: AppTheme.glass(context),
         borderRadius: BorderRadius.circular(14),
         child: InkWell(
           borderRadius: BorderRadius.circular(14),
@@ -466,8 +450,8 @@ class _SettingsTile extends StatelessWidget {
                     children: [
                       Text(
                         title,
-                        style: const TextStyle(
-                          color: Colors.white,
+                        style: TextStyle(
+                          color: AppTheme.onSurface(context),
                           fontSize: 15,
                           fontWeight: FontWeight.w500,
                         ),
@@ -475,17 +459,17 @@ class _SettingsTile extends StatelessWidget {
                       const SizedBox(height: 2),
                       Text(
                         subtitle,
-                        style: const TextStyle(
-                          color: AppTheme.kTextDim,
+                        style: TextStyle(
+                          color: AppTheme.dimText(context),
                           fontSize: 12,
                         ),
                       ),
                     ],
                   ),
                 ),
-                const Icon(
+                Icon(
                   Icons.chevron_right_rounded,
-                  color: Colors.white24,
+                  color: AppTheme.onSurface(context).withAlpha(40),
                   size: 22,
                 ),
               ],
@@ -516,7 +500,7 @@ class _SettingsSwitch extends StatelessWidget {
     return Padding(
       padding: const EdgeInsets.only(bottom: 6),
       child: Material(
-        color: AppTheme.kGlassWhite,
+        color: AppTheme.glass(context),
         borderRadius: BorderRadius.circular(14),
         child: InkWell(
           borderRadius: BorderRadius.circular(14),
@@ -533,8 +517,8 @@ class _SettingsSwitch extends StatelessWidget {
                     children: [
                       Text(
                         title,
-                        style: const TextStyle(
-                          color: Colors.white,
+                        style: TextStyle(
+                          color: AppTheme.onSurface(context),
                           fontSize: 15,
                           fontWeight: FontWeight.w500,
                         ),
@@ -542,8 +526,8 @@ class _SettingsSwitch extends StatelessWidget {
                       const SizedBox(height: 2),
                       Text(
                         subtitle,
-                        style: const TextStyle(
-                          color: AppTheme.kTextDim,
+                        style: TextStyle(
+                          color: AppTheme.dimText(context),
                           fontSize: 12,
                         ),
                       ),
@@ -555,8 +539,8 @@ class _SettingsSwitch extends StatelessWidget {
                   onChanged: onChanged,
                   activeThumbColor: AppTheme.neonCyan,
                   activeTrackColor: AppTheme.neonCyan.withAlpha(80),
-                  inactiveThumbColor: AppTheme.kTextDim,
-                  inactiveTrackColor: Colors.white12,
+                  inactiveThumbColor: AppTheme.dimText(context),
+                  inactiveTrackColor: AppTheme.onSurface(context).withAlpha(20),
                 ),
               ],
             ),
@@ -583,7 +567,7 @@ class _ThemeOption extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Material(
-      color: isSelected ? AppTheme.neonCyan.withAlpha(20) : AppTheme.kSurface,
+      color: isSelected ? AppTheme.neonCyan.withAlpha(20) : AppTheme.surface(context),
       borderRadius: BorderRadius.circular(14),
       child: InkWell(
         borderRadius: BorderRadius.circular(14),
@@ -605,7 +589,7 @@ class _ThemeOption extends StatelessWidget {
                 child: Text(
                   label,
                   style: TextStyle(
-                    color: isSelected ? Colors.white : Colors.white.withAlpha(220),
+                    color: isSelected ? AppTheme.onSurface(context) : AppTheme.onSurface(context).withAlpha(220),
                     fontSize: 15,
                     fontWeight: isSelected ? FontWeight.w600 : FontWeight.w500,
                   ),

@@ -215,3 +215,13 @@ main() → MediaKit.ensureInitialized() → di.init() → SharedPreferences load
 
 ### iOS Info.plist
 - Added `NSAppTransportSecurity > NSAllowsArbitraryLoads = true` to allow WKWebView and Dio to access signed googlevideo URLs
+
+### UI Fixes (v1.5.1)
+- **Browser header replaced with compact globe icon + "Browser" text** — `BrowserBrandHeader` rewritten to match Downloads page style (`Icons.language_rounded`, 18px w700 title, no background color or bottom border). Old "MunDown" logo header removed entirely.
+- **Search box margins and borders fixed** — `BrowserStartPage` search field now wrapped in `Padding(horizontal: 16)`, border radius unified to 12px, internal padding set to `horizontal: 16, vertical: 14`. No more edge overflow.
+- **Storage Location tile removed from Settings (iOS + Android)** — Removed `_storagePath`, `_loadPaths()`, and the "Storage Location" `_SettingsTile` from `settings_page.dart`. Unreadable internal paths no longer shown to users. `path_provider` import kept only for cache calculation.
+- **Theme mode now applies immediately to full app on selection** — Root cause was hardcoded dark colors (`AppTheme.kDeepBg`, `Colors.white`) throughout the widget tree preventing `MaterialApp.themeMode` changes from being visible. Fixed by:
+  1. Adding `AppTheme.surface(context)`, `background(context)`, `onSurface(context)`, `dimText(context)`, `glass(context)`, `divider(context)`, and `isDark(context)` helpers.
+  2. Removing `const` from `MainScaffold()` in `main.dart` and from child pages in `main_scaffold.dart` so the entire tree rebuilds when theme changes.
+  3. Updating all main pages and widgets (Browser, Downloads, Settings, Library, BottomBar, QualityBottomSheet, file cards, etc.) to use `Theme.of(context)`-aware colors instead of hardcoded values.
+  4. All 3 modes (dark / light / system) now visually change the entire app immediately.

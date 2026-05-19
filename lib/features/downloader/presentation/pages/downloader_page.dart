@@ -20,7 +20,6 @@ class _DownloaderPageState extends State<DownloaderPage>
   Widget build(BuildContext context) {
     super.build(context);
     return Scaffold(
-      backgroundColor: AppTheme.kDeepBg,
       body: SafeArea(
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
@@ -50,10 +49,10 @@ class _DownloaderPageState extends State<DownloaderPage>
           shaderCallback: (rect) => const LinearGradient(
             colors: [AppTheme.neonPurple, AppTheme.neonCyan],
           ).createShader(rect),
-          child: const Icon(Icons.downloading_rounded, color: Colors.white, size: 20),
+          child: Icon(Icons.downloading_rounded, color: AppTheme.onSurface(context), size: 20),
         ),
         const SizedBox(width: 8),
-        const Text('Downloads', style: TextStyle(color: Colors.white, fontWeight: FontWeight.w700, fontSize: 18, letterSpacing: 0.3)),
+        Text('Downloads', style: TextStyle(color: AppTheme.onSurface(context), fontWeight: FontWeight.w700, fontSize: 18, letterSpacing: 0.3)),
       ]),
     );
   }
@@ -72,11 +71,11 @@ class _DownloaderPageState extends State<DownloaderPage>
     return Center(
       key: const ValueKey('empty'),
       child: Column(mainAxisSize: MainAxisSize.min, children: [
-        Icon(Icons.download_rounded, color: AppTheme.kTextDim.withAlpha(80), size: 64),
+        Icon(Icons.download_rounded, color: AppTheme.dimText(context).withAlpha(80), size: 64),
         const SizedBox(height: 16),
-        const Text('No downloads yet', style: TextStyle(color: Colors.white, fontSize: 18, fontWeight: FontWeight.w600)),
+        Text('No downloads yet', style: TextStyle(color: AppTheme.onSurface(context), fontSize: 18, fontWeight: FontWeight.w600)),
         const SizedBox(height: 8),
-        Text('Browse the web and tap Download to start', style: TextStyle(color: AppTheme.kTextDim.withAlpha(180), fontSize: 14)),
+        Text('Browse the web and tap Download to start', style: TextStyle(color: AppTheme.dimText(context).withAlpha(180), fontSize: 14)),
       ]),
     );
   }
@@ -86,7 +85,7 @@ class _DownloaderPageState extends State<DownloaderPage>
       Container(
         key: const ValueKey('fetching'),
         padding: const EdgeInsets.all(20),
-        decoration: BoxDecoration(color: AppTheme.kSurface, borderRadius: BorderRadius.circular(16)),
+        decoration: BoxDecoration(color: AppTheme.surface(context), borderRadius: BorderRadius.circular(16)),
         child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
           Row(children: [
             Container(
@@ -95,16 +94,16 @@ class _DownloaderPageState extends State<DownloaderPage>
               child: const Icon(Icons.cloud_download_rounded, color: AppTheme.neonCyan),
             ),
             const SizedBox(width: 16),
-            const Expanded(child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-              Text('Resolving download...', style: TextStyle(color: Colors.white, fontSize: 16, fontWeight: FontWeight.w600)),
-              SizedBox(height: 4),
-              Text('Extracting media details', style: TextStyle(color: AppTheme.kTextDim, fontSize: 13)),
+            Expanded(child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+              Text('Resolving download...', style: TextStyle(color: AppTheme.onSurface(context), fontSize: 16, fontWeight: FontWeight.w600)),
+              const SizedBox(height: 4),
+              Text('Extracting media details', style: TextStyle(color: AppTheme.dimText(context), fontSize: 13)),
             ])),
           ]),
           const SizedBox(height: 24),
           ClipRRect(
             borderRadius: BorderRadius.circular(4),
-            child: const LinearProgressIndicator(minHeight: 6, backgroundColor: AppTheme.kDeepBg, valueColor: AlwaysStoppedAnimation<Color>(AppTheme.neonCyan)),
+            child: LinearProgressIndicator(minHeight: 6, backgroundColor: AppTheme.background(context), valueColor: const AlwaysStoppedAnimation<Color>(AppTheme.neonCyan)),
           ),
         ]),
       ),
@@ -148,7 +147,7 @@ class _DownloaderPageState extends State<DownloaderPage>
         key: const ValueKey('progress'),
         padding: const EdgeInsets.all(20),
         decoration: BoxDecoration(
-          color: AppTheme.kSurface, borderRadius: BorderRadius.circular(16),
+          color: AppTheme.surface(context), borderRadius: BorderRadius.circular(16),
           border: Border.all(color: AppTheme.neonCyan.withAlpha(30)),
           boxShadow: [BoxShadow(color: AppTheme.neonCyan.withAlpha(10), blurRadius: 16, offset: const Offset(0, 4))],
         ),
@@ -157,11 +156,11 @@ class _DownloaderPageState extends State<DownloaderPage>
             _buildThumbnail(entity, AppTheme.neonCyan, Icons.download_rounded),
             const SizedBox(width: 16),
             Expanded(child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-              Text(displayTitle, style: const TextStyle(color: Colors.white, fontSize: 15, fontWeight: FontWeight.w600), maxLines: 2, overflow: TextOverflow.ellipsis),
+              Text(displayTitle, style: TextStyle(color: AppTheme.onSurface(context), fontSize: 15, fontWeight: FontWeight.w600), maxLines: 2, overflow: TextOverflow.ellipsis),
               const SizedBox(height: 6),
               Row(children: [
                 Text('${_formatBytes(entity.receivedBytes)} / ${_formatBytes(entity.totalBytes)}',
-                  style: const TextStyle(color: AppTheme.kTextDim, fontSize: 12)),
+                  style: TextStyle(color: AppTheme.dimText(context), fontSize: 12)),
               ]),
             ])),
           ]),
@@ -169,7 +168,7 @@ class _DownloaderPageState extends State<DownloaderPage>
           Row(children: [
             Expanded(child: ClipRRect(
               borderRadius: BorderRadius.circular(4),
-              child: LinearProgressIndicator(value: entity.progress, minHeight: 8, backgroundColor: AppTheme.kDeepBg, valueColor: const AlwaysStoppedAnimation<Color>(AppTheme.neonCyan)),
+              child: LinearProgressIndicator(value: entity.progress, minHeight: 8, backgroundColor: AppTheme.background(context), valueColor: const AlwaysStoppedAnimation<Color>(AppTheme.neonCyan)),
             )),
             const SizedBox(width: 12),
             Text('$pct%', style: const TextStyle(color: AppTheme.neonCyan, fontSize: 14, fontWeight: FontWeight.w700)),
@@ -203,7 +202,7 @@ class _DownloaderPageState extends State<DownloaderPage>
       Container(
         padding: const EdgeInsets.all(20),
         decoration: BoxDecoration(
-          color: AppTheme.kSurface, borderRadius: BorderRadius.circular(16),
+          color: AppTheme.surface(context), borderRadius: BorderRadius.circular(16),
           border: Border.all(color: const Color(0xFFFFA726).withAlpha(50)),
         ),
         child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
@@ -211,7 +210,7 @@ class _DownloaderPageState extends State<DownloaderPage>
             _buildThumbnail(entity, const Color(0xFFFFA726), Icons.pause_circle_rounded),
             const SizedBox(width: 16),
             Expanded(child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-              Text(displayTitle, style: const TextStyle(color: Colors.white, fontSize: 15, fontWeight: FontWeight.w600), maxLines: 2, overflow: TextOverflow.ellipsis),
+              Text(displayTitle, style: TextStyle(color: AppTheme.onSurface(context), fontSize: 15, fontWeight: FontWeight.w600), maxLines: 2, overflow: TextOverflow.ellipsis),
               const SizedBox(height: 6),
               Container(
                 padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
@@ -223,13 +222,13 @@ class _DownloaderPageState extends State<DownloaderPage>
                 ]),
               ),
               const SizedBox(height: 4),
-              Text('$pct% • ${_formatBytes(entity.receivedBytes)} / ${_formatBytes(entity.totalBytes)}', style: const TextStyle(color: AppTheme.kTextDim, fontSize: 12)),
+              Text('$pct% • ${_formatBytes(entity.receivedBytes)} / ${_formatBytes(entity.totalBytes)}', style: TextStyle(color: AppTheme.dimText(context), fontSize: 12)),
             ])),
           ]),
           const SizedBox(height: 20),
           ClipRRect(
             borderRadius: BorderRadius.circular(4),
-            child: LinearProgressIndicator(value: entity.progress, minHeight: 8, backgroundColor: AppTheme.kDeepBg, valueColor: const AlwaysStoppedAnimation<Color>(Color(0xFFFFA726))),
+            child: LinearProgressIndicator(value: entity.progress, minHeight: 8, backgroundColor: AppTheme.background(context), valueColor: const AlwaysStoppedAnimation<Color>(Color(0xFFFFA726))),
           ),
           const SizedBox(height: 20),
           Row(children: [
@@ -259,7 +258,7 @@ class _DownloaderPageState extends State<DownloaderPage>
         key: const ValueKey('completed'),
         padding: const EdgeInsets.all(20),
         decoration: BoxDecoration(
-          color: AppTheme.kSurface, borderRadius: BorderRadius.circular(16),
+          color: AppTheme.surface(context), borderRadius: BorderRadius.circular(16),
           border: Border.all(color: const Color(0xFF2ECC71).withAlpha(50)),
           boxShadow: [BoxShadow(color: const Color(0xFF2ECC71).withAlpha(10), blurRadius: 16, offset: const Offset(0, 4))],
         ),
@@ -268,7 +267,7 @@ class _DownloaderPageState extends State<DownloaderPage>
             _buildThumbnail(entity, const Color(0xFF2ECC71), Icons.check_circle_outline_rounded),
             const SizedBox(width: 16),
             Expanded(child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-              Text(displayTitle, style: const TextStyle(color: Colors.white, fontSize: 15, fontWeight: FontWeight.w600), maxLines: 2, overflow: TextOverflow.ellipsis),
+              Text(displayTitle, style: TextStyle(color: AppTheme.onSurface(context), fontSize: 15, fontWeight: FontWeight.w600), maxLines: 2, overflow: TextOverflow.ellipsis),
               const SizedBox(height: 8),
               Row(children: [
                 Container(
@@ -281,7 +280,7 @@ class _DownloaderPageState extends State<DownloaderPage>
                   ]),
                 ),
                 const SizedBox(width: 8),
-                Text(_formatBytes(entity.totalBytes), style: const TextStyle(color: AppTheme.kTextDim, fontSize: 12)),
+                Text(_formatBytes(entity.totalBytes), style: TextStyle(color: AppTheme.dimText(context), fontSize: 12)),
               ]),
             ])),
           ]),
@@ -290,7 +289,7 @@ class _DownloaderPageState extends State<DownloaderPage>
             onPressed: () => context.read<DownloaderBloc>().add(const ResetDownloaderEvent()),
             icon: const Icon(Icons.check_rounded, size: 18),
             label: const Text('Dismiss'),
-            style: OutlinedButton.styleFrom(foregroundColor: Colors.white70, side: BorderSide(color: Colors.white.withAlpha(40)), shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)), padding: const EdgeInsets.symmetric(vertical: 12)),
+            style: OutlinedButton.styleFrom(foregroundColor: AppTheme.onSurface(context).withAlpha(179), side: BorderSide(color: AppTheme.divider(context)), shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)), padding: const EdgeInsets.symmetric(vertical: 12)),
           )),
         ]),
       ),
@@ -303,7 +302,7 @@ class _DownloaderPageState extends State<DownloaderPage>
         key: const ValueKey('failed'),
         padding: const EdgeInsets.all(20),
         decoration: BoxDecoration(
-          color: AppTheme.kSurface, borderRadius: BorderRadius.circular(16),
+          color: AppTheme.surface(context), borderRadius: BorderRadius.circular(16),
           border: Border.all(color: AppTheme.kErrorRed.withAlpha(50)),
         ),
         child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
@@ -311,9 +310,9 @@ class _DownloaderPageState extends State<DownloaderPage>
             Container(width: 56, height: 56, decoration: BoxDecoration(color: AppTheme.kErrorRed.withAlpha(20), borderRadius: BorderRadius.circular(12)), child: const Icon(Icons.error_outline_rounded, color: AppTheme.kErrorRed, size: 28)),
             const SizedBox(width: 16),
             Expanded(child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-              const Text('Download Failed', style: TextStyle(color: Colors.white, fontSize: 15, fontWeight: FontWeight.w600)),
+              Text('Download Failed', style: TextStyle(color: AppTheme.onSurface(context), fontSize: 15, fontWeight: FontWeight.w600)),
               const SizedBox(height: 6),
-              Text(message, style: const TextStyle(color: AppTheme.kTextDim, fontSize: 13), maxLines: 2, overflow: TextOverflow.ellipsis),
+              Text(message, style: TextStyle(color: AppTheme.dimText(context), fontSize: 13), maxLines: 2, overflow: TextOverflow.ellipsis),
             ])),
           ]),
           const SizedBox(height: 24),
@@ -321,7 +320,7 @@ class _DownloaderPageState extends State<DownloaderPage>
             onPressed: () => context.read<DownloaderBloc>().add(const ResetDownloaderEvent()),
             icon: const Icon(Icons.close_rounded, size: 18),
             label: const Text('Dismiss'),
-            style: OutlinedButton.styleFrom(foregroundColor: Colors.white70, side: BorderSide(color: Colors.white.withAlpha(40)), shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)), padding: const EdgeInsets.symmetric(vertical: 12)),
+            style: OutlinedButton.styleFrom(foregroundColor: AppTheme.onSurface(context).withAlpha(179), side: BorderSide(color: AppTheme.divider(context)), shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)), padding: const EdgeInsets.symmetric(vertical: 12)),
           )),
         ]),
       ),

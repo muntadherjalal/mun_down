@@ -41,7 +41,7 @@ class FileGridCard extends StatelessWidget {
 
     return Container(
       decoration: BoxDecoration(
-        color: AppTheme.kGlassWhite,
+        color: AppTheme.glass(context),
         borderRadius: BorderRadius.circular(16),
         border: Border.all(color: accentColor.withAlpha(isLocked ? 50 : 25)),
       ),
@@ -92,8 +92,8 @@ class FileGridCard extends StatelessWidget {
                   children: [
                     Text(
                       file.displayTitle,
-                      style: const TextStyle(
-                        color: Colors.white,
+                      style: TextStyle(
+                        color: AppTheme.onSurface(context),
                         fontSize: 13,
                         fontWeight: FontWeight.w600,
                       ),
@@ -112,7 +112,7 @@ class FileGridCard extends StatelessWidget {
                             size: 14,
                           )
                         else
-                          Icon(iconData, color: AppTheme.kTextDim, size: 14),
+                          Icon(iconData, color: AppTheme.dimText(context), size: 14),
                       ],
                     ),
                   ],

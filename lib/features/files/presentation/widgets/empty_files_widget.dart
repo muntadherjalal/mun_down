@@ -27,7 +27,7 @@ class EmptyFilesWidget extends StatelessWidget {
           Text(
             'Your Library is empty',
             style: TextStyle(
-              color: Colors.white.withAlpha(140),
+              color: AppTheme.onSurface(context).withAlpha(140),
               fontSize: 17,
               fontWeight: FontWeight.w600,
             ),
@@ -35,7 +35,10 @@ class EmptyFilesWidget extends StatelessWidget {
           const SizedBox(height: 6),
           Text(
             'Downloaded media will appear here.',
-            style: TextStyle(color: Colors.white.withAlpha(70), fontSize: 13),
+            style: TextStyle(
+              color: AppTheme.onSurface(context).withAlpha(70),
+              fontSize: 13,
+            ),
           ),
         ],
       ),

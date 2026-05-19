@@ -7,30 +7,27 @@ class BrowserBrandHeader extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Container(
-      width: double.infinity,
-      padding: const EdgeInsets.symmetric(vertical: 8),
-      decoration: BoxDecoration(
-        color: AppTheme.kDeepBg,
-        border: Border(
-          bottom: BorderSide(color: Colors.white.withAlpha(10), width: 1),
-        ),
-      ),
+      padding: const EdgeInsets.fromLTRB(16, 10, 16, 10),
       child: Row(
-        mainAxisAlignment: MainAxisAlignment.center,
         children: [
-          const Icon(
-            Icons.download_rounded,
-            color: AppTheme.neonCyan,
-            size: 18,
-          ),
-          const SizedBox(width: 6),
-          const Text(
-            'MunDown',
-            style: TextStyle(
+          ShaderMask(
+            shaderCallback: (rect) => const LinearGradient(
+              colors: [AppTheme.neonPurple, AppTheme.neonCyan],
+            ).createShader(rect),
+            child: const Icon(
+              Icons.language_rounded,
               color: Colors.white,
-              fontSize: 15,
+              size: 20,
+            ),
+          ),
+          const SizedBox(width: 8),
+          Text(
+            'Browser',
+            style: TextStyle(
+              color: AppTheme.onSurface(context),
+              fontSize: 18,
               fontWeight: FontWeight.w700,
-              letterSpacing: 0.5,
+              letterSpacing: 0.3,
             ),
           ),
         ],

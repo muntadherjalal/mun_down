@@ -73,8 +73,8 @@ class FilesPageState extends State<FilesPage>
     );
     if (!ok && mounted) {
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(
-          backgroundColor: AppTheme.kSurface,
+        SnackBar(
+          backgroundColor: AppTheme.surface(context),
           behavior: SnackBarBehavior.floating,
           content: Text(
             'Authentication failed',
@@ -113,7 +113,7 @@ class FilesPageState extends State<FilesPage>
     final isNowLocked = !lockedFiles.contains(file.path);
     ScaffoldMessenger.of(context).showSnackBar(
       SnackBar(
-        backgroundColor: AppTheme.kSurface,
+        backgroundColor: AppTheme.surface(context),
         behavior: SnackBarBehavior.floating,
         duration: const Duration(seconds: 2),
         content: Row(
@@ -155,7 +155,7 @@ class FilesPageState extends State<FilesPage>
         }
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
-            backgroundColor: AppTheme.kSurface,
+            backgroundColor: AppTheme.surface(context),
             content: Text(
               '${file.displayTitle} deleted',
               style: const TextStyle(color: AppTheme.neonCyan, fontSize: 13),
@@ -172,7 +172,7 @@ class FilesPageState extends State<FilesPage>
     return showDialog<bool>(
       context: context,
       builder: (_) => AlertDialog(
-        backgroundColor: AppTheme.kDeepBg,
+        backgroundColor: AppTheme.background(context),
         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
         title: Row(
           children: [
@@ -190,10 +190,10 @@ class FilesPageState extends State<FilesPage>
               ),
             ),
             const SizedBox(width: 12),
-            const Text(
+            Text(
               'Delete File',
               style: TextStyle(
-                color: Colors.white,
+                color: AppTheme.onSurface(context),
                 fontSize: 17,
                 fontWeight: FontWeight.w700,
               ),
@@ -202,8 +202,8 @@ class FilesPageState extends State<FilesPage>
         ),
         content: RichText(
           text: TextSpan(
-            style: const TextStyle(
-              color: AppTheme.kTextDim,
+            style: TextStyle(
+              color: AppTheme.dimText(context),
               fontSize: 14,
               height: 1.4,
             ),
@@ -211,8 +211,8 @@ class FilesPageState extends State<FilesPage>
               const TextSpan(text: 'Are you sure you want to delete '),
               TextSpan(
                 text: name,
-                style: const TextStyle(
-                  color: Colors.white,
+                style: TextStyle(
+                  color: AppTheme.onSurface(context),
                   fontWeight: FontWeight.w600,
                 ),
               ),
@@ -224,9 +224,9 @@ class FilesPageState extends State<FilesPage>
         actions: [
           TextButton(
             onPressed: () => Navigator.pop(context, false),
-            child: const Text(
+            child: Text(
               'Cancel',
-              style: TextStyle(color: AppTheme.kTextDim),
+              style: TextStyle(color: AppTheme.dimText(context)),
             ),
           ),
           ElevatedButton.icon(
@@ -235,7 +235,7 @@ class FilesPageState extends State<FilesPage>
             label: const Text('Delete'),
             style: ElevatedButton.styleFrom(
               backgroundColor: AppTheme.kErrorRed,
-              foregroundColor: Colors.white,
+              foregroundColor: AppTheme.onSurface(context),
               shape: RoundedRectangleBorder(
                 borderRadius: BorderRadius.circular(10),
               ),
@@ -273,7 +273,6 @@ class FilesPageState extends State<FilesPage>
               }
             },
             child: Scaffold(
-              backgroundColor: AppTheme.kDeepBg,
             body: SafeArea(
               child: Column(
                 children: [
@@ -310,16 +309,15 @@ class FilesPageState extends State<FilesPage>
   Widget _buildHeader(Set<String> lockedFiles) {
     return Container(
       padding: const EdgeInsets.fromLTRB(20, 16, 8, 4),
-      color: AppTheme.kDeepBg,
       child: Row(
         children: [
           ShaderMask(
             shaderCallback: (rect) => const LinearGradient(
               colors: [AppTheme.neonPurple, AppTheme.neonCyan],
             ).createShader(rect),
-            child: const Icon(
+            child: Icon(
               Icons.video_library_rounded,
-              color: Colors.white,
+              color: AppTheme.onSurface(context),
               size: 26,
             ),
           ),
@@ -328,10 +326,10 @@ class FilesPageState extends State<FilesPage>
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                const Text(
+                Text(
                   'My Library',
                   style: TextStyle(
-                    color: Colors.white,
+                    color: AppTheme.onSurface(context),
                     fontSize: 22,
                     fontWeight: FontWeight.w700,
                   ),
@@ -340,8 +338,8 @@ class FilesPageState extends State<FilesPage>
                   Text(
                     '${_files.length} file${_files.length == 1 ? '' : 's'}'
                     '${lockedFiles.isNotEmpty ? ' • ${lockedFiles.length} locked' : ''}',
-                    style: const TextStyle(
-                      color: AppTheme.kTextDim,
+                    style: TextStyle(
+                      color: AppTheme.dimText(context),
                       fontSize: 12,
                     ),
                   ),
@@ -349,9 +347,9 @@ class FilesPageState extends State<FilesPage>
             ),
           ),
           IconButton(
-            icon: const Icon(
+            icon: Icon(
               Icons.refresh_rounded,
-              color: Colors.white70,
+              color: AppTheme.onSurface(context).withAlpha(179),
               size: 22,
             ),
             onPressed: _loadFiles,
@@ -365,7 +363,7 @@ class FilesPageState extends State<FilesPage>
   Widget _buildFileList(List<DownloadedFileInfo> displayedFiles, Set<String> lockedFiles, BuildContext context) {
     return RefreshIndicator(
       color: AppTheme.neonCyan,
-      backgroundColor: AppTheme.kSurface,
+      backgroundColor: AppTheme.surface(context),
       onRefresh: _loadFiles,
       child: _viewMode == ViewMode.list
           ? ListView.separated(

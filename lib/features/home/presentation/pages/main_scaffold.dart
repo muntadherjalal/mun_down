@@ -49,9 +49,9 @@ class _MainScaffoldState extends State<MainScaffold> {
           physics: const NeverScrollableScrollPhysics(),
           children: [
             BrowserPage(onTabSwitch: _onTabTapped),
-            const DownloaderPage(),
-            const FilesPage(),
-            const SettingsPage(),
+            DownloaderPage(),
+            FilesPage(),
+            SettingsPage(),
           ],
         ),
       ),
@@ -62,9 +62,15 @@ class _MainScaffoldState extends State<MainScaffold> {
   Widget _buildBottomBar() {
     return Container(
       decoration: BoxDecoration(
-        color: AppTheme.kSurface,
+        color: AppTheme.surface(context),
         boxShadow: [
-          BoxShadow(color: Colors.black.withAlpha(80), blurRadius: 16, offset: const Offset(0, -4)),
+          BoxShadow(
+            color: AppTheme.isDark(context)
+                ? Colors.black.withAlpha(80)
+                : Colors.black.withAlpha(20),
+            blurRadius: 16,
+            offset: const Offset(0, -4),
+          ),
         ],
       ),
       child: SafeArea(
@@ -130,7 +136,7 @@ class _TabItem extends StatelessWidget {
               Stack(
                 clipBehavior: Clip.none,
                 children: [
-                  Icon(icon, color: isSelected ? AppTheme.neonCyan : AppTheme.kTextDim, size: 20),
+                  Icon(icon, color: isSelected ? AppTheme.neonCyan : AppTheme.dimText(context), size: 20),
                   if (showBadge)
                     Positioned(
                       right: -5,
@@ -141,7 +147,7 @@ class _TabItem extends StatelessWidget {
                         decoration: BoxDecoration(
                           color: AppTheme.neonCyan,
                           shape: BoxShape.circle,
-                          border: Border.all(color: AppTheme.kSurface, width: 1.5),
+                          border: Border.all(color: AppTheme.surface(context), width: 1.5),
                           boxShadow: [BoxShadow(color: AppTheme.neonCyan.withAlpha(100), blurRadius: 5)],
                         ),
                       ),
@@ -149,7 +155,7 @@ class _TabItem extends StatelessWidget {
                 ],
               ),
               const SizedBox(height: 2),
-              Text(label, style: TextStyle(color: isSelected ? AppTheme.neonCyan : AppTheme.kTextDim, fontSize: 10, fontWeight: isSelected ? FontWeight.w600 : FontWeight.w400)),
+              Text(label, style: TextStyle(color: isSelected ? AppTheme.neonCyan : AppTheme.dimText(context), fontSize: 10, fontWeight: isSelected ? FontWeight.w600 : FontWeight.w400)),
               AnimatedContainer(
                 duration: const Duration(milliseconds: 250),
                 margin: const EdgeInsets.only(top: 2),

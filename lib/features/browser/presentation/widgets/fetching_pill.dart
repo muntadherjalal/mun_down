@@ -11,14 +11,16 @@ class FetchingPill extends StatelessWidget {
       child: Container(
         padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 12),
         decoration: BoxDecoration(
-          color: AppTheme.kSurface.withAlpha(240),
+          color: AppTheme.surface(context).withAlpha(240),
           borderRadius: BorderRadius.circular(30),
           border: Border.all(color: AppTheme.neonCyan.withAlpha(50)),
-          boxShadow: const [
+          boxShadow: [
             BoxShadow(
-              color: Colors.black45,
+              color: AppTheme.isDark(context)
+                  ? Colors.black45
+                  : Colors.black.withAlpha(20),
               blurRadius: 10,
-              offset: Offset(0, 4),
+              offset: const Offset(0, 4),
             ),
           ],
         ),
@@ -34,10 +36,10 @@ class FetchingPill extends StatelessWidget {
               ),
             ),
             const SizedBox(width: 12),
-            const Text(
+            Text(
               'Fetching qualities...',
               style: TextStyle(
-                color: Colors.white,
+                color: AppTheme.onSurface(context),
                 fontSize: 14,
                 fontWeight: FontWeight.w500,
               ),

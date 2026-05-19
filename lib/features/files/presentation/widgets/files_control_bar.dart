@@ -23,23 +23,23 @@ class FilesControlBar extends StatelessWidget {
       child: Row(
         children: [
           // Filters
-          _buildFilterChip('All', LibraryFilter.all),
+          _buildFilterChip(context, 'All', LibraryFilter.all),
           const SizedBox(width: 8),
-          _buildFilterChip('Video', LibraryFilter.video),
+          _buildFilterChip(context, 'Video', LibraryFilter.video),
           const SizedBox(width: 8),
-          _buildFilterChip('Audio', LibraryFilter.audio),
+          _buildFilterChip(context, 'Audio', LibraryFilter.audio),
           const Spacer(),
           // View Mode Toggles
           Container(
             decoration: BoxDecoration(
-              color: AppTheme.kSurface,
+              color: AppTheme.surface(context),
               borderRadius: BorderRadius.circular(8),
-              border: Border.all(color: Colors.white10),
+              border: Border.all(color: AppTheme.divider(context)),
             ),
             child: Row(
               children: [
-                _buildViewModeButton(Icons.view_list_rounded, ViewMode.list),
-                _buildViewModeButton(Icons.grid_view_rounded, ViewMode.grid),
+                _buildViewModeButton(context, Icons.view_list_rounded, ViewMode.list),
+                _buildViewModeButton(context, Icons.grid_view_rounded, ViewMode.grid),
               ],
             ),
           ),
@@ -48,7 +48,7 @@ class FilesControlBar extends StatelessWidget {
     );
   }
 
-  Widget _buildFilterChip(String label, LibraryFilter filter) {
+  Widget _buildFilterChip(BuildContext context, String label, LibraryFilter filter) {
     final isSelected = currentFilter == filter;
     return InkWell(
       onTap: () => onFilterChanged(filter),
@@ -60,14 +60,14 @@ class FilesControlBar extends StatelessWidget {
               ? AppTheme.neonCyan.withAlpha(25)
               : Colors.transparent,
           border: Border.all(
-            color: isSelected ? AppTheme.neonCyan : Colors.white24,
+            color: isSelected ? AppTheme.neonCyan : AppTheme.onSurface(context).withAlpha(40),
           ),
           borderRadius: BorderRadius.circular(16),
         ),
         child: Text(
           label,
           style: TextStyle(
-            color: isSelected ? AppTheme.neonCyan : AppTheme.kTextDim,
+            color: isSelected ? AppTheme.neonCyan : AppTheme.dimText(context),
             fontSize: 13,
             fontWeight: isSelected ? FontWeight.w600 : FontWeight.w400,
           ),
@@ -76,7 +76,7 @@ class FilesControlBar extends StatelessWidget {
     );
   }
 
-  Widget _buildViewModeButton(IconData icon, ViewMode mode) {
+  Widget _buildViewModeButton(BuildContext context, IconData icon, ViewMode mode) {
     final isSelected = viewMode == mode;
     return InkWell(
       onTap: () => onViewModeChanged(mode),
@@ -84,13 +84,13 @@ class FilesControlBar extends StatelessWidget {
       child: Container(
         padding: const EdgeInsets.all(6),
         decoration: BoxDecoration(
-          color: isSelected ? Colors.white12 : Colors.transparent,
+          color: isSelected ? AppTheme.onSurface(context).withAlpha(20) : Colors.transparent,
           borderRadius: BorderRadius.circular(8),
         ),
         child: Icon(
           icon,
           size: 20,
-          color: isSelected ? Colors.white : AppTheme.kTextDim,
+          color: isSelected ? AppTheme.onSurface(context) : AppTheme.dimText(context),
         ),
       ),
     );

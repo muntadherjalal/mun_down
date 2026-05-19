@@ -37,10 +37,12 @@ class BrowserBottomBar extends StatelessWidget {
         bottom: MediaQuery.of(context).padding.bottom + 8,
       ),
       decoration: BoxDecoration(
-        color: AppTheme.kSurface,
+        color: AppTheme.surface(context),
         boxShadow: [
           BoxShadow(
-            color: Colors.black.withAlpha(60),
+            color: AppTheme.isDark(context)
+                ? Colors.black.withAlpha(60)
+                : Colors.black.withAlpha(20),
             blurRadius: 12,
             offset: const Offset(0, -4),
           ),
@@ -92,8 +94,11 @@ class BrowserBottomBar extends StatelessWidget {
               decoration: BoxDecoration(
                 borderRadius: BorderRadius.circular(23),
                 gradient: isStartPage
-                    ? const LinearGradient(
-                        colors: [Color(0x1AFFFFFF), Color(0x1AFFFFFF)],
+                    ? LinearGradient(
+                        colors: [
+                          AppTheme.onSurface(context).withAlpha(20),
+                          AppTheme.onSurface(context).withAlpha(20),
+                        ],
                       )
                     : const LinearGradient(
                         colors: [AppTheme.neonPurple, AppTheme.neonCyan],
@@ -117,7 +122,9 @@ class BrowserBottomBar extends StatelessWidget {
                       ? Icons.hourglass_top_rounded
                       : Icons.download_rounded,
                   size: 20,
-                  color: isStartPage ? Colors.white38 : Colors.white,
+                  color: isStartPage
+                      ? AppTheme.disabled(context)
+                      : AppTheme.onSurface(context),
                 ),
                 label: Text(
                   isFetchingStreams ? 'Wait...' : 'Download',
@@ -125,13 +132,15 @@ class BrowserBottomBar extends StatelessWidget {
                     fontSize: 15,
                     fontWeight: FontWeight.w700,
                     letterSpacing: 0.5,
-                    color: isStartPage ? Colors.white38 : Colors.white,
+                    color: isStartPage
+                        ? AppTheme.disabled(context)
+                        : AppTheme.onSurface(context),
                   ),
                 ),
                 style: ElevatedButton.styleFrom(
                   backgroundColor: Colors.transparent,
                   shadowColor: Colors.transparent,
-                  disabledForegroundColor: Colors.white38,
+                  disabledForegroundColor: AppTheme.disabled(context),
                   disabledBackgroundColor: Colors.transparent,
                   padding: const EdgeInsets.symmetric(horizontal: 24),
                   shape: RoundedRectangleBorder(
@@ -168,12 +177,12 @@ class _BottomNavIcon extends StatelessWidget {
         child: Column(
           mainAxisSize: MainAxisSize.min,
           children: [
-            Icon(icon, color: Colors.white70, size: 20),
+            Icon(icon, color: AppTheme.onSurface(context).withAlpha(179), size: 20),
             const SizedBox(height: 2),
             Text(
               label,
-              style: const TextStyle(
-                color: AppTheme.kTextDim,
+              style: TextStyle(
+                color: AppTheme.dimText(context),
                 fontSize: 9,
                 fontWeight: FontWeight.w500,
               ),

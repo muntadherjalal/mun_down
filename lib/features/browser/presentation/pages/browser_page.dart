@@ -188,8 +188,8 @@ class _BrowserPageState extends State<BrowserPage>
       context.read<DownloaderBloc>().add(StartDownloadEvent(url: url));
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(
-            backgroundColor: AppTheme.kSurface,
+          SnackBar(
+            backgroundColor: AppTheme.surface(context),
             behavior: SnackBarBehavior.floating,
             content: Text(
               'Download started — check the Downloads tab',
@@ -247,11 +247,11 @@ class _BrowserPageState extends State<BrowserPage>
     if (mounted) {
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
-          backgroundColor: AppTheme.kSurface,
+          backgroundColor: AppTheme.surface(context),
           behavior: SnackBarBehavior.floating,
           content: Text(
             'Downloading: ${selected.title}',
-            style: const TextStyle(color: AppTheme.neonCyan, fontSize: 13),
+            style: TextStyle(color: AppTheme.neonCyan, fontSize: 13),
             maxLines: 1,
             overflow: TextOverflow.ellipsis,
           ),
@@ -266,7 +266,6 @@ class _BrowserPageState extends State<BrowserPage>
     final isStartPage = _isStartPage(_currentUrl);
 
     return Scaffold(
-      backgroundColor: AppTheme.kDeepBg,
       body: SafeArea(
         bottom: false,
         child: Column(
@@ -277,7 +276,7 @@ class _BrowserPageState extends State<BrowserPage>
                 child: LinearProgressIndicator(
                   value: _loadingProgress,
                   minHeight: 2.5,
-                  backgroundColor: AppTheme.kSurface,
+                  backgroundColor: AppTheme.surface(context),
                   valueColor: const AlwaysStoppedAnimation<Color>(
                     AppTheme.neonCyan,
                   ),
@@ -314,8 +313,8 @@ class _BrowserPageState extends State<BrowserPage>
                   : _controller.reload(),
               onHistory: () {
                 ScaffoldMessenger.of(context).showSnackBar(
-                  const SnackBar(
-                    backgroundColor: AppTheme.kSurface,
+                  SnackBar(
+                    backgroundColor: AppTheme.surface(context),
                     behavior: SnackBarBehavior.floating,
                     content: Text(
                       'History logged successfully',
@@ -329,8 +328,8 @@ class _BrowserPageState extends State<BrowserPage>
               },
               onBookmarks: () {
                 ScaffoldMessenger.of(context).showSnackBar(
-                  const SnackBar(
-                    backgroundColor: AppTheme.kSurface,
+                  SnackBar(
+                    backgroundColor: AppTheme.surface(context),
                     behavior: SnackBarBehavior.floating,
                     content: Text(
                       'Saved to Bookmarks!',

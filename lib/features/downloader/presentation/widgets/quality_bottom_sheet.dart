@@ -52,15 +52,15 @@ class _QualityBottomSheetState extends State<QualityBottomSheet> {
       maxChildSize: 0.85,
       builder: (_, scrollController) {
         return Container(
-          decoration: const BoxDecoration(
-            color: AppTheme.kDeepBg,
-            borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
+          decoration: BoxDecoration(
+            color: AppTheme.background(context),
+            borderRadius: const BorderRadius.vertical(top: Radius.circular(24)),
           ),
           child: Column(
             children: [
               _buildHandle(),
               _buildTitle(),
-              const Divider(color: Colors.white10, height: 1),
+              Divider(color: AppTheme.divider(context), height: 1),
               Expanded(child: _buildBody(scrollController)),
               _buildDownloadButton(),
             ],
@@ -77,7 +77,7 @@ class _QualityBottomSheetState extends State<QualityBottomSheet> {
         width: 40,
         height: 4,
         decoration: BoxDecoration(
-          color: Colors.white24,
+          color: AppTheme.onSurface(context).withAlpha(40),
           borderRadius: BorderRadius.circular(2),
         ),
       ),
@@ -93,14 +93,14 @@ class _QualityBottomSheetState extends State<QualityBottomSheet> {
             shaderCallback: (r) => const LinearGradient(
               colors: [AppTheme.neonPurple, AppTheme.neonCyan],
             ).createShader(r),
-            child: const Icon(Icons.high_quality_rounded,
-                color: Colors.white, size: 24),
+            child: Icon(Icons.high_quality_rounded,
+                color: AppTheme.onSurface(context), size: 24),
           ),
           const SizedBox(width: 10),
-          const Text(
+          Text(
             'Select Quality',
             style: TextStyle(
-              color: Colors.white,
+              color: AppTheme.onSurface(context),
               fontSize: 18,
               fontWeight: FontWeight.w700,
             ),
@@ -209,10 +209,12 @@ class _QualityBottomSheetState extends State<QualityBottomSheet> {
     return Container(
       padding: const EdgeInsets.fromLTRB(20, 16, 20, 32),
       decoration: BoxDecoration(
-        color: AppTheme.kDeepBg,
+        color: AppTheme.background(context),
         boxShadow: [
           BoxShadow(
-            color: Colors.black.withAlpha(50),
+            color: AppTheme.isDark(context)
+                ? Colors.black.withAlpha(50)
+                : Colors.black.withAlpha(10),
             blurRadius: 10,
             offset: const Offset(0, -5),
           ),
@@ -229,7 +231,7 @@ class _QualityBottomSheetState extends State<QualityBottomSheet> {
                     colors: [AppTheme.neonPurple, AppTheme.neonCyan],
                   )
                 : null,
-            color: enabled ? null : Colors.white12,
+            color: enabled ? null : AppTheme.onSurface(context).withAlpha(20),
             boxShadow: enabled
                 ? [
                     BoxShadow(
@@ -256,8 +258,8 @@ class _QualityBottomSheetState extends State<QualityBottomSheet> {
             style: ElevatedButton.styleFrom(
               backgroundColor: Colors.transparent,
               shadowColor: Colors.transparent,
-              foregroundColor: Colors.white,
-              disabledForegroundColor: Colors.white54,
+              foregroundColor: AppTheme.onSurface(context),
+              disabledForegroundColor: AppTheme.disabled(context),
               shape: RoundedRectangleBorder(
                 borderRadius: BorderRadius.circular(14),
               ),
@@ -278,7 +280,7 @@ class _SkeletonTile extends StatelessWidget {
       padding: const EdgeInsets.only(bottom: 8),
       child: Container(
         decoration: BoxDecoration(
-          color: AppTheme.kSurface,
+          color: AppTheme.surface(context),
           borderRadius: BorderRadius.circular(14),
         ),
         padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
@@ -288,7 +290,7 @@ class _SkeletonTile extends StatelessWidget {
               width: 40,
               height: 40,
               decoration: BoxDecoration(
-                color: Colors.white12,
+                color: AppTheme.onSurface(context).withAlpha(20),
                 borderRadius: BorderRadius.circular(10),
               ),
             ),
@@ -301,7 +303,7 @@ class _SkeletonTile extends StatelessWidget {
                     height: 12,
                     width: 120,
                     decoration: BoxDecoration(
-                      color: Colors.white12,
+                      color: AppTheme.onSurface(context).withAlpha(20),
                       borderRadius: BorderRadius.circular(4),
                     ),
                   ),
@@ -310,7 +312,7 @@ class _SkeletonTile extends StatelessWidget {
                     height: 10,
                     width: 60,
                     decoration: BoxDecoration(
-                      color: Colors.white10,
+                      color: AppTheme.onSurface(context).withAlpha(15),
                       borderRadius: BorderRadius.circular(4),
                     ),
                   ),
@@ -348,7 +350,7 @@ class _StreamTile extends StatelessWidget {
       child: AnimatedContainer(
         duration: const Duration(milliseconds: 200),
         decoration: BoxDecoration(
-          color: isSelected ? accentColor.withAlpha(20) : AppTheme.kSurface,
+          color: isSelected ? accentColor.withAlpha(20) : AppTheme.surface(context),
           borderRadius: BorderRadius.circular(14),
           border: Border.all(
             color: isSelected ? accentColor : Colors.transparent,
@@ -382,8 +384,8 @@ class _StreamTile extends StatelessWidget {
                           customLabel ?? stream.label,
                           style: TextStyle(
                             color: isSelected
-                                ? Colors.white
-                                : Colors.white.withAlpha(220),
+                                ? AppTheme.onSurface(context)
+                                : AppTheme.onSurface(context).withAlpha(220),
                             fontSize: 14,
                             fontWeight: isSelected
                                 ? FontWeight.w700
@@ -399,8 +401,8 @@ class _StreamTile extends StatelessWidget {
                                 if (stream.formattedSize.isNotEmpty)
                                   Text(
                                     stream.formattedSize,
-                                    style: const TextStyle(
-                                      color: AppTheme.kTextDim,
+                                    style: TextStyle(
+                                      color: AppTheme.dimText(context),
                                       fontSize: 12,
                                     ),
                                   ),

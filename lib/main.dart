@@ -109,7 +109,7 @@ class MunDownAppState extends State<MunDownApp> with WidgetsBindingObserver {
       theme: AppTheme.lightTheme,
       darkTheme: AppTheme.darkTheme,
       themeMode: _themeMode,
-      home: const MainScaffold(),
+      home: MainScaffold(),
     );
   }
 }
