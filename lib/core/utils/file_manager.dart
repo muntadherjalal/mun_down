@@ -110,7 +110,8 @@ class FileManager {
   static Future<String> get downloadsPath async {
     String path;
     if (Platform.isAndroid) {
-      path = '/storage/emulated/0/Download/$_folderName';
+      final dir = await getExternalStorageDirectory();
+      path = '${dir!.path}/$_folderName';
     } else {
       final dir = await getApplicationDocumentsDirectory();
       path = '${dir.path}/$_folderName';
@@ -178,7 +179,9 @@ class FileManager {
   ) async {
     try {
       final file = File('$filePath.json');
-      await file.writeAsString(jsonEncode(DownloadMetadataModel.fromEntity(metadata).toJson()));
+      await file.writeAsString(
+        jsonEncode(DownloadMetadataModel.fromEntity(metadata).toJson()),
+      );
     } catch (_) {}
   }
 

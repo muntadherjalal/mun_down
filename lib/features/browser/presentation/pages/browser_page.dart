@@ -35,11 +35,13 @@ class _BrowserPageState extends State<BrowserPage>
   final bool _adBlockEnabled = true;
   bool _isFetchingStreams = false;
 
-  // Desktop UA tends to give YouTube proper inline playback in WKWebView.
-  static const _userAgent =
-      'Mozilla/5.0 (Macintosh; Intel Mac OS X 14_4) '
-      'AppleWebKit/605.1.15 (KHTML, like Gecko) '
-      'Version/17.4 Safari/605.1.15';
+  static final _userAgent = Platform.isAndroid
+      ? 'Mozilla/5.0 (Linux; Android 13; Pixel 7) '
+            'AppleWebKit/537.36 (KHTML, like Gecko) '
+            'Chrome/124.0.0.0 Mobile Safari/537.36'
+      : 'Mozilla/5.0 (iPhone; CPU iPhone OS 17_0 like Mac OS X) '
+            'AppleWebKit/605.1.15 (KHTML, like Gecko) '
+            'Version/17.0 Mobile/15E148 Safari/604.1';
 
   @override
   bool get wantKeepAlive => true;
@@ -238,11 +240,14 @@ class _BrowserPageState extends State<BrowserPage>
       needsMux: selected.needsMux,
       audioUrl: selected.audioUrl,
       audioFormat: selected.audioFormat,
+      videoId: YouTubeExtractor.parseVideoId(url),
+      itag: selected.itag,
+      audioItag: selected.audioItag,
     );
 
     context.read<DownloaderBloc>().add(
-          StartDownloadEvent(url: downloadUrl, metadata: metadata),
-        );
+      StartDownloadEvent(url: downloadUrl, metadata: metadata),
+    );
 
     if (mounted) {
       ScaffoldMessenger.of(context).showSnackBar(
@@ -318,10 +323,7 @@ class _BrowserPageState extends State<BrowserPage>
                     behavior: SnackBarBehavior.floating,
                     content: Text(
                       'History logged successfully',
-                      style: TextStyle(
-                        color: AppTheme.neonCyan,
-                        fontSize: 13,
-                      ),
+                      style: TextStyle(color: AppTheme.neonCyan, fontSize: 13),
                     ),
                   ),
                 );

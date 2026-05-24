@@ -105,6 +105,18 @@ class DownloadMetadata extends Equatable {
   /// Audio container name (e.g. "mp4", "webm").
   final String? audioFormat;
 
+  /// 11-character YouTube video ID. When non-null (alongside [itag]) the
+  /// data source routes the download through `youtube_explode_dart` instead
+  /// of Dio — this is what fixes 403 errors on signed googlevideo URLs.
+  final String? videoId;
+
+  /// itag of the chosen video/muxed/audio stream inside the YouTube
+  /// manifest. Used to look up a fresh `StreamInfo` at download time.
+  final int? itag;
+
+  /// itag of the paired audio stream when [needsMux] is true.
+  final int? audioItag;
+
   const DownloadMetadata({
     required this.title,
     this.thumbnailUrl,
@@ -118,6 +130,9 @@ class DownloadMetadata extends Equatable {
     this.needsMux = false,
     this.audioUrl,
     this.audioFormat,
+    this.videoId,
+    this.itag,
+    this.audioItag,
   });
 
   @override
@@ -134,5 +149,8 @@ class DownloadMetadata extends Equatable {
         needsMux,
         audioUrl,
         audioFormat,
+        videoId,
+        itag,
+        audioItag,
       ];
 }

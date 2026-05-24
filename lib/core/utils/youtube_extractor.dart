@@ -1,3 +1,7 @@
+import 'dart:async';
+import 'dart:io';
+
+import 'package:dio/dio.dart';
 import 'package:youtube_explode_dart/youtube_explode_dart.dart';
 
 /// Describes a single downloadable media stream.
@@ -43,6 +47,14 @@ class StreamOption {
   /// Audio container name for the paired audio stream.
   final String? audioFormat;
 
+  /// itag — uniquely identifies the stream inside the YouTube manifest.
+  /// Used to re-fetch a fresh signed URL on download (the URL stored in
+  /// [url] expires; fetching by itag against a fresh manifest avoids 403s).
+  final int? itag;
+
+  /// itag of the paired audio stream when [needsMux] is true.
+  final int? audioItag;
+
   const StreamOption({
     required this.label,
     required this.url,
@@ -57,6 +69,8 @@ class StreamOption {
     this.needsMux = false,
     this.audioUrl,
     this.audioFormat,
+    this.itag,
+    this.audioItag,
   });
 
   /// Returns a human-readable file size string.
@@ -85,6 +99,11 @@ class YouTubeExtractor {
         host.contains('youtu.be') ||
         host.contains('youtube-nocookie.com');
   }
+
+  /// Parses the 11-character video ID out of any YouTube URL form
+  /// (watch?v=…, youtu.be/…, /shorts/…, /embed/…). Returns null if [url]
+  /// isn't a recognizable YouTube URL.
+  static String? parseVideoId(String url) => VideoId.parseVideoId(url);
 
   /// Fetches the video title for the given YouTube [url].
   Future<String> getVideoTitle(String url) async {
@@ -129,6 +148,7 @@ class YouTubeExtractor {
         thumbnailUrl: thumbnailUrl,
         format: s.container.name,
         quality: quality,
+        itag: s.tag,
       );
     }
 
@@ -171,6 +191,8 @@ class YouTubeExtractor {
         needsMux: true,
         audioUrl: bestAudio.url.toString(),
         audioFormat: bestAudio.container.name,
+        itag: s.tag,
+        audioItag: bestAudio.tag,
       );
     });
 
@@ -197,10 +219,111 @@ class YouTubeExtractor {
         thumbnailUrl: thumbnailUrl,
         format: s.container.name,
         quality: quality,
+        itag: s.tag,
       ));
     }
 
     return options;
+  }
+
+  /// Downloads the YouTube stream identified by [videoId] + [itag] to
+  /// [savePath].
+  ///
+  /// Why this exists: extracted googlevideo URLs are signed against the
+  /// internal [youtube_explode_dart] HTTP client and rotate frequently.
+  /// Hitting them directly with Dio almost always 403s. Routing the
+  /// download through `streamsClient.get(...)` lets the library handle
+  /// header signing, ANDROID-vs-WEB range mode, throttle chunking, HLS,
+  /// and signature refresh on 403 transparently.
+  ///
+  /// Re-fetches the manifest on every call so the URL is always fresh.
+  ///
+  /// Skip-bytes resume: when [startOffset] > 0, the first [startOffset]
+  /// bytes of the upstream are discarded and subsequent bytes are appended
+  /// to whatever is already at [savePath]. The existing partial file is
+  /// preserved — only the new tail is written.
+  ///
+  /// Throws a [DioException] with [DioExceptionType.cancel] when
+  /// [cancelToken] is cancelled mid-download, so the calling data source's
+  /// existing cancel-handling path lights up unchanged.
+  Future<void> downloadStream({
+    required String videoId,
+    required int itag,
+    required String savePath,
+    int startOffset = 0,
+    void Function(int received, int total)? onProgress,
+    CancelToken? cancelToken,
+  }) async {
+    final manifest = await _yt.videos.streamsClient.getManifest(videoId);
+    StreamInfo? selected;
+    for (final s in manifest.streams) {
+      if (s.tag == itag) {
+        selected = s;
+        break;
+      }
+    }
+    if (selected == null) {
+      throw StateError(
+        'Stream with itag=$itag not found in fresh manifest for $videoId',
+      );
+    }
+
+    final totalBytes = selected.size.totalBytes;
+
+    // Open file in append mode. Existing bytes (from a paused run) are
+    // preserved; new bytes are written at the end.
+    final file = File(savePath);
+    final dir = file.parent;
+    if (!dir.existsSync()) {
+      await dir.create(recursive: true);
+    }
+    final raf = await file.open(mode: FileMode.writeOnlyAppend);
+
+    var writtenThisSession = 0;
+    var skipped = 0;
+
+    var cancelRequested = cancelToken?.isCancelled ?? false;
+    // Listen for cancellation. The closure outlives the download but only
+    // mutates a local flag, so it's harmless after the fact.
+    cancelToken?.whenCancel.then((_) => cancelRequested = true);
+
+    try {
+      final byteStream = _yt.videos.streamsClient.get(selected);
+      await for (final List<int> chunk in byteStream) {
+        if (cancelRequested) {
+          throw DioException.requestCancelled(
+            requestOptions: RequestOptions(),
+            reason: 'User cancelled YouTube download',
+            stackTrace: StackTrace.current,
+          );
+        }
+
+        var offset = 0;
+        if (skipped < startOffset) {
+          final remaining = startOffset - skipped;
+          if (chunk.length <= remaining) {
+            skipped += chunk.length;
+            // Surface progress even during skip-bytes so the UI shows the
+            // file already at its prior resume position.
+            onProgress?.call(skipped, totalBytes);
+            continue;
+          }
+          offset = remaining;
+          skipped = startOffset;
+        }
+
+        if (offset == 0) {
+          await raf.writeFrom(chunk);
+          writtenThisSession += chunk.length;
+        } else {
+          await raf.writeFrom(chunk.sublist(offset));
+          writtenThisSession += chunk.length - offset;
+        }
+        onProgress?.call(startOffset + writtenThisSession, totalBytes);
+      }
+    } finally {
+      await raf.close();
+    }
   }
 
   /// Releases resources held by the underlying YouTube client.

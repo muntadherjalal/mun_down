@@ -10,6 +10,7 @@ import 'package:permission_handler/permission_handler.dart';
 
 import '../../../../core/errors/exceptions.dart';
 import '../../../../core/utils/file_manager.dart';
+import '../../../../core/utils/youtube_extractor.dart';
 import '../../domain/entities/download_entity.dart';
 import '../models/download_model.dart';
 import '../models/download_metadata_model.dart';
@@ -26,28 +27,34 @@ abstract class DownloaderRemoteDataSource {
   });
 }
 
-/// Concrete implementation backed by [Dio].
+/// Concrete implementation backed by [Dio] for generic URLs and the
+/// `youtube_explode_dart` library for YouTube streams.
 ///
-/// - Adds YouTube-friendly headers (UA / Referer / Origin / Range) so signed
-///   googlevideo URLs don't get blocked.
-/// - Retries transient failures up to 3 times with exponential backoff.
+/// - For YouTube downloads (metadata.videoId + metadata.itag are set), the
+///   download is routed through [YouTubeExtractor.downloadStream], which
+///   uses the library's own HTTP client. This avoids 403 errors caused by
+///   client-mismatched UAs and signed-URL expiration.
+/// - For non-YouTube URLs, falls back to [Dio] with retry+backoff.
 /// - When [DownloadMetadata.needsMux] is true, downloads video-only and
 ///   audio-only streams separately, then merges them with ffmpeg.
 class DownloaderRemoteDataSourceImpl implements DownloaderRemoteDataSource {
   final Dio dio;
+  final YouTubeExtractor extractor;
 
-  DownloaderRemoteDataSourceImpl({required this.dio});
+  DownloaderRemoteDataSourceImpl({
+    required this.dio,
+    required this.extractor,
+  });
 
-  /// Headers sent with every Google-video / generic media download. Mimicking
-  /// a desktop browser request lets us bypass YouTube's anti-bot checks.
-  static const Map<String, String> _youtubeHeaders = {
+  /// Headers sent with non-YouTube generic media downloads. Mimicking a
+  /// desktop browser request avoids basic anti-bot checks for arbitrary
+  /// streaming URLs.
+  static const Map<String, String> _genericHeaders = {
     'User-Agent':
         'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 '
-            '(KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36',
+        '(KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36',
     'Accept': '*/*',
     'Accept-Language': 'en-US,en;q=0.9',
-    'Origin': 'https://www.youtube.com',
-    'Referer': 'https://www.youtube.com/',
   };
 
   static const int _maxRetries = 3;
@@ -109,8 +116,7 @@ class DownloaderRemoteDataSourceImpl implements DownloaderRemoteDataSource {
             status = await Permission.storage.request();
           }
           if (!status.isGranted) {
-            throw const ServerException(
-                message: 'Storage permission denied');
+            throw const ServerException(message: 'Storage permission denied');
           }
         }
       }
@@ -140,9 +146,7 @@ class DownloaderRemoteDataSourceImpl implements DownloaderRemoteDataSource {
       final baseModel = DownloadModel(
         id: id,
         originalUrl: url,
-        title: existingSavePath != null
-            ? savePath.split('/').last
-            : fileName,
+        title: existingSavePath != null ? savePath.split('/').last : fileName,
         progress: 0,
         savePath: savePath,
         status: DownloadStatus.downloading,
@@ -152,7 +156,21 @@ class DownloaderRemoteDataSourceImpl implements DownloaderRemoteDataSource {
       controller.add(baseModel);
 
       // ── Phase 2: Downloading ──────────────────────────────
-      if (metadata is DownloadMetadata && metadata.needsMux &&
+      final isYouTube = metadata is DownloadMetadata &&
+          (metadata.videoId?.isNotEmpty ?? false) &&
+          metadata.itag != null;
+
+      if (isYouTube) {
+        await _downloadYouTube(
+          metadata: metadata,
+          savePath: savePath,
+          baseModel: baseModel,
+          controller: controller,
+          cancelToken: cancelToken as CancelToken?,
+          allowResume: existingSavePath != null,
+        );
+      } else if (metadata is DownloadMetadata &&
+          metadata.needsMux &&
           (metadata.audioUrl?.isNotEmpty ?? false)) {
         await _downloadAndMux(
           videoUrl: url,
@@ -178,7 +196,8 @@ class DownloaderRemoteDataSourceImpl implements DownloaderRemoteDataSource {
         try {
           final file = File('$savePath.json');
           await file.writeAsString(
-              jsonEncode(DownloadMetadataModel.fromEntity(metadata).toJson()));
+            jsonEncode(DownloadMetadataModel.fromEntity(metadata).toJson()),
+          );
         } catch (_) {}
       }
 
@@ -212,7 +231,8 @@ class DownloaderRemoteDataSourceImpl implements DownloaderRemoteDataSource {
         );
       } else {
         final status = e.response?.statusCode;
-        final detail = e.response?.statusMessage ?? e.message ?? 'Network error';
+        final detail =
+            e.response?.statusMessage ?? e.message ?? 'Network error';
         controller.addError(
           ServerException(
             message: status != null ? 'HTTP $status — $detail' : detail,
@@ -246,9 +266,8 @@ class DownloaderRemoteDataSourceImpl implements DownloaderRemoteDataSource {
           if (f.existsSync()) startBytes = await f.length();
         }
 
-        final headers = Map<String, String>.from(_youtubeHeaders);
+        final headers = Map<String, String>.from(_genericHeaders);
         if (startBytes > 0) headers['Range'] = 'bytes=$startBytes-';
-
         await dio.download(
           url,
           savePath,
@@ -262,8 +281,9 @@ class DownloaderRemoteDataSourceImpl implements DownloaderRemoteDataSource {
           deleteOnError: false,
           onReceiveProgress: (received, total) {
             if (total > 0) {
-              final realTotal =
-                  startBytes > 0 && total != -1 ? total + startBytes : total;
+              final realTotal = startBytes > 0 && total != -1
+                  ? total + startBytes
+                  : total;
               final realReceived = received + startBytes;
               controller.add(
                 baseModel.copyWith(
@@ -297,6 +317,146 @@ class DownloaderRemoteDataSourceImpl implements DownloaderRemoteDataSource {
     throw lastError!;
   }
 
+  /// Downloads a YouTube stream (or video-only + audio-only pair) through
+  /// `youtube_explode_dart`. The library re-fetches the manifest, signs the
+  /// request with the right client UA, and handles 403 retries internally —
+  /// none of which Dio can do reliably for googlevideo URLs.
+  Future<void> _downloadYouTube({
+    required DownloadMetadata metadata,
+    required String savePath,
+    required DownloadModel baseModel,
+    required StreamController<DownloadModel> controller,
+    required CancelToken? cancelToken,
+    required bool allowResume,
+  }) async {
+    final videoId = metadata.videoId!;
+    final itag = metadata.itag!;
+
+    if (metadata.needsMux && metadata.audioItag != null) {
+      // ── Two-leg download (video-only + audio-only) + ffmpeg mux ────
+      final tmpDir = await getTemporaryDirectory();
+      final stamp = DateTime.now().millisecondsSinceEpoch;
+      final videoTmp = '${tmpDir.path}/mun_video_$stamp.tmp';
+      final audioTmp = '${tmpDir.path}/mun_audio_$stamp.tmp';
+
+      int videoReceived = 0, videoTotal = 0;
+      int audioReceived = 0, audioTotal = 0;
+
+      void emitCombined() {
+        final total = videoTotal + audioTotal;
+        final received = videoReceived + audioReceived;
+        final progress = total > 0 ? (received / total).clamp(0.0, 1.0) : 0.0;
+        controller.add(
+          baseModel.copyWith(
+            status: DownloadStatus.downloading,
+            progress: progress,
+            receivedBytes: received,
+            totalBytes: total,
+          ),
+        );
+      }
+
+      try {
+        await extractor.downloadStream(
+          videoId: videoId,
+          itag: itag,
+          savePath: videoTmp,
+          cancelToken: cancelToken,
+          onProgress: (rcv, tot) {
+            videoReceived = rcv;
+            videoTotal = tot;
+            emitCombined();
+          },
+        );
+
+        await extractor.downloadStream(
+          videoId: videoId,
+          itag: metadata.audioItag!,
+          savePath: audioTmp,
+          cancelToken: cancelToken,
+          onProgress: (rcv, tot) {
+            audioReceived = rcv;
+            audioTotal = tot;
+            emitCombined();
+          },
+        );
+
+        // Indicate muxing phase to the UI.
+        controller.add(
+          baseModel.copyWith(
+            status: DownloadStatus.downloading,
+            progress: 0.98,
+            receivedBytes: videoReceived + audioReceived,
+            totalBytes: videoTotal + audioTotal,
+          ),
+        );
+
+        final cmd =
+            '-y -i "$videoTmp" -i "$audioTmp" -c:v copy -c:a aac -movflags +faststart "$savePath"';
+        final session = await FFmpegKit.execute(cmd);
+        final returnCode = await session.getReturnCode();
+        if (!ReturnCode.isSuccess(returnCode)) {
+          final logs = await session.getAllLogsAsString();
+          throw ServerException(
+            message:
+                'Failed to merge video and audio: ${(logs ?? '').split('\n').last}',
+          );
+        }
+      } finally {
+        for (final p in [videoTmp, audioTmp]) {
+          try {
+            final f = File(p);
+            if (f.existsSync()) await f.delete();
+          } catch (_) {}
+        }
+      }
+    } else {
+      // ── Single-stream download (muxed video / audio-only) ──────────
+      // Skip-bytes resume: existing partial file is preserved; library
+      // re-fetches from byte 0 and discards already-saved bytes.
+      var startOffset = 0;
+      if (allowResume) {
+        final f = File(savePath);
+        if (f.existsSync()) startOffset = await f.length();
+      } else {
+        // Fresh download — wipe any leftover partial file so writeOnlyAppend
+        // doesn't accidentally append to an unrelated previous attempt.
+        final f = File(savePath);
+        if (f.existsSync()) {
+          try {
+            await f.delete();
+          } catch (_) {}
+        }
+      }
+
+      await extractor.downloadStream(
+        videoId: videoId,
+        itag: itag,
+        savePath: savePath,
+        startOffset: startOffset,
+        cancelToken: cancelToken,
+        onProgress: (rcv, tot) {
+          if (tot > 0) {
+            controller.add(
+              baseModel.copyWith(
+                progress: (rcv / tot).clamp(0.0, 1.0),
+                receivedBytes: rcv,
+                totalBytes: tot,
+              ),
+            );
+          } else {
+            controller.add(
+              baseModel.copyWith(
+                receivedBytes: rcv,
+                totalBytes: 0,
+              ),
+            );
+          }
+        },
+      );
+    }
+  }
+
   /// Downloads video-only + audio-only streams and merges them with ffmpeg.
   Future<void> _downloadAndMux({
     required String videoUrl,
@@ -317,8 +477,7 @@ class DownloaderRemoteDataSourceImpl implements DownloaderRemoteDataSource {
     void emitCombined({DownloadStatus status = DownloadStatus.downloading}) {
       final total = videoTotal + audioTotal;
       final received = videoReceived + audioReceived;
-      final progress =
-          total > 0 ? (received / total).clamp(0.0, 1.0) : 0.0;
+      final progress = total > 0 ? (received / total).clamp(0.0, 1.0) : 0.0;
       controller.add(
         baseModel.copyWith(
           status: status,
@@ -371,7 +530,8 @@ class DownloaderRemoteDataSourceImpl implements DownloaderRemoteDataSource {
       if (!ReturnCode.isSuccess(returnCode)) {
         final logs = await session.getAllLogsAsString();
         throw ServerException(
-          message: 'Failed to merge video and audio: ${(logs ?? '').split('\n').last}',
+          message:
+              'Failed to merge video and audio: ${(logs ?? '').split('\n').last}',
         );
       }
     } finally {
@@ -400,7 +560,7 @@ class DownloaderRemoteDataSourceImpl implements DownloaderRemoteDataSource {
           url,
           savePath,
           options: Options(
-            headers: _youtubeHeaders,
+            headers: _genericHeaders,
             receiveTimeout: const Duration(seconds: 60),
             responseType: ResponseType.bytes,
           ),
@@ -467,8 +627,9 @@ class DownloaderRemoteDataSourceImpl implements DownloaderRemoteDataSource {
     } catch (_) {}
 
     final uri = Uri.parse(url);
-    final lastSegment =
-        uri.pathSegments.isNotEmpty ? uri.pathSegments.last : 'download';
+    final lastSegment = uri.pathSegments.isNotEmpty
+        ? uri.pathSegments.last
+        : 'download';
 
     if (lastSegment.contains('.') && !lastSegment.endsWith('.bin')) {
       return lastSegment;

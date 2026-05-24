@@ -11,6 +11,9 @@ class DownloadMetadataModel extends DownloadMetadata {
     required super.fileSizeBytes,
     required super.format,
     required super.quality,
+    super.videoId,
+    super.itag,
+    super.audioItag,
   });
 
   factory DownloadMetadataModel.fromJson(Map<String, dynamic> json) =>
@@ -26,6 +29,9 @@ class DownloadMetadataModel extends DownloadMetadata {
         fileSizeBytes: json['fileSizeBytes'],
         format: json['format'],
         quality: json['quality'],
+        videoId: json['videoId'] as String?,
+        itag: json['itag'] as int?,
+        audioItag: json['audioItag'] as int?,
       );
 
   Map<String, dynamic> toJson() => {
@@ -38,6 +44,9 @@ class DownloadMetadataModel extends DownloadMetadata {
         'fileSizeBytes': fileSizeBytes,
         'format': format,
         'quality': quality,
+        'videoId': videoId,
+        'itag': itag,
+        'audioItag': audioItag,
       };
 
   factory DownloadMetadataModel.fromEntity(DownloadMetadata entity) {
@@ -51,6 +60,9 @@ class DownloadMetadataModel extends DownloadMetadata {
       fileSizeBytes: entity.fileSizeBytes,
       format: entity.format,
       quality: entity.quality,
+      videoId: entity.videoId,
+      itag: entity.itag,
+      audioItag: entity.audioItag,
     );
   }
 }

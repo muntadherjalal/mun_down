@@ -50,7 +50,10 @@ Future<void> init() async {
 
   // Data sources
   sl.registerLazySingleton<DownloaderRemoteDataSource>(
-    () => DownloaderRemoteDataSourceImpl(dio: sl<Dio>()),
+    () => DownloaderRemoteDataSourceImpl(
+      dio: sl<Dio>(),
+      extractor: sl<YouTubeExtractor>(),
+    ),
   );
 
   // Repositories

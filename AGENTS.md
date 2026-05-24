@@ -114,11 +114,10 @@ lib/
 
 ### Networking & Downloads
 - All HTTP via Dio instance registered in sl
-- YouTube downloads via YouTubeExtractor (youtube_explode_dart wrapper)
+- YouTube downloads route through `YouTubeExtractor.downloadStream(videoId, itag, ...)` which uses `youtube_explode_dart`'s own `StreamClient.get(StreamInfo)` — the library handles signed URL refresh, ANDROID/WEB Range mode, throttle chunking, and 403 recovery. Do NOT try to download googlevideo URLs with raw Dio.
+- Generic (non-YouTube) downloads use Dio with browser-style headers and 3-attempt retry/exponential backoff
 - File paths via path_provider + FileManager utility (Android saves to public Downloads/MunDown folder, iOS to app documents)
 - Always check connectivity via NetworkInfo before network calls
-- Download requests include YouTube headers (User-Agent, Referer, Origin, Accept) to avoid anti-bot blocking
-- 3-attempt retry with exponential backoff (1s, 2s, 4s) for transient network failures
 
 ---
 
