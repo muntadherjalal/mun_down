@@ -1,5 +1,7 @@
 import 'package:equatable/equatable.dart';
 
+import 'download_metadata.dart';
+
 /// Represents the lifecycle state of a single download.
 enum DownloadStatus {
   /// No download has been initiated yet.
@@ -56,6 +58,9 @@ class DownloadEntity extends Equatable {
   /// URL of the video/audio thumbnail for UI display.
   final String? thumbnailUrl;
 
+  /// Metadata associated with this download (optional for backward compatibility).
+  final DownloadMetadata? metadata;
+
   const DownloadEntity({
     required this.id,
     required this.originalUrl,
@@ -67,6 +72,7 @@ class DownloadEntity extends Equatable {
     this.totalBytes = 0,
     this.receivedBytes = 0,
     this.thumbnailUrl,
+    this.metadata,
   });
 
   @override
@@ -81,76 +87,6 @@ class DownloadEntity extends Equatable {
     totalBytes,
     receivedBytes,
     thumbnailUrl,
+    metadata,
   ];
-}
-
-class DownloadMetadata extends Equatable {
-  final String title;
-  final String? thumbnailUrl;
-  final String? author;
-  final Duration? duration;
-  final String sourceUrl;
-  final DateTime downloadedAt;
-  final int fileSizeBytes;
-  final String format;
-  final String quality;
-
-  /// When `true`, the primary [DownloaderRemoteDataSource] URL is video-only
-  /// and the [audioUrl] must be downloaded separately and merged via ffmpeg.
-  final bool needsMux;
-
-  /// Audio-only URL paired with the video-only URL for muxing.
-  final String? audioUrl;
-
-  /// Audio container name (e.g. "mp4", "webm").
-  final String? audioFormat;
-
-  /// 11-character YouTube video ID. When non-null (alongside [itag]) the
-  /// data source routes the download through `youtube_explode_dart` instead
-  /// of Dio — this is what fixes 403 errors on signed googlevideo URLs.
-  final String? videoId;
-
-  /// itag of the chosen video/muxed/audio stream inside the YouTube
-  /// manifest. Used to look up a fresh `StreamInfo` at download time.
-  final int? itag;
-
-  /// itag of the paired audio stream when [needsMux] is true.
-  final int? audioItag;
-
-  const DownloadMetadata({
-    required this.title,
-    this.thumbnailUrl,
-    required this.author,
-    this.duration,
-    required this.sourceUrl,
-    required this.downloadedAt,
-    required this.fileSizeBytes,
-    required this.format,
-    required this.quality,
-    this.needsMux = false,
-    this.audioUrl,
-    this.audioFormat,
-    this.videoId,
-    this.itag,
-    this.audioItag,
-  });
-
-  @override
-  List<Object?> get props => [
-        title,
-        thumbnailUrl,
-        author,
-        duration,
-        sourceUrl,
-        downloadedAt,
-        fileSizeBytes,
-        format,
-        quality,
-        needsMux,
-        audioUrl,
-        audioFormat,
-        videoId,
-        itag,
-        audioItag,
-      ];
 }

@@ -49,3 +49,8 @@ final class PauseDownloadEvent extends DownloaderEvent {
 final class ResumeDownloadEvent extends DownloaderEvent {
   const ResumeDownloadEvent();
 }
+
+/// Fired to initialize the BLoC from saved downloads.
+final class InitializeFromSavedDownloadsEvent extends DownloaderEvent {
+  const InitializeFromSavedDownloadsEvent();
+}

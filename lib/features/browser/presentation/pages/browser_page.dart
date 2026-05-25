@@ -1,6 +1,6 @@
 import 'dart:io';
 
-import '../../../downloader/domain/entities/download_entity.dart';
+import '../../../downloader/domain/entities/download_metadata.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:webview_flutter/webview_flutter.dart';
@@ -228,21 +228,23 @@ class _BrowserPageState extends State<BrowserPage>
     final downloadUrl = selected.url;
 
     final metadata = DownloadMetadata(
-      title: selected.title,
-      thumbnailUrl: selected.thumbnailUrl,
-      author: selected.author,
-      duration: selected.duration,
-      sourceUrl: url,
-      downloadedAt: DateTime.now(),
-      fileSizeBytes: selected.sizeBytes ?? 0,
-      format: selected.format,
-      quality: selected.quality,
-      needsMux: selected.needsMux,
-      audioUrl: selected.audioUrl,
-      audioFormat: selected.audioFormat,
-      videoId: YouTubeExtractor.parseVideoId(url),
-      itag: selected.itag,
-      audioItag: selected.audioItag,
+      fileMetadata: FileMetadata(
+        title: selected.title,
+        thumbnailUrl: selected.thumbnailUrl,
+        author: selected.author,
+        duration: selected.duration,
+        sourceUrl: url,
+        downloadedAt: DateTime.now(),
+        fileSizeBytes: selected.sizeBytes ?? 0,
+        format: selected.format,
+        quality: selected.quality,
+      ),
+      youtubeMetadata: YouTubeMetadata(
+        videoId: YouTubeExtractor.parseVideoId(url),
+        itag: selected.itag,
+        audioItag: selected.audioItag,
+        audioFormat: selected.audioFormat,
+      ),
     );
 
     context.read<DownloaderBloc>().add(

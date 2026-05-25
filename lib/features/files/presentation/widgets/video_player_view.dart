@@ -23,7 +23,7 @@ class VideoPlayerView extends StatefulWidget {
 }
 
 class _VideoPlayerViewState extends State<VideoPlayerView> {
-  late final Player _player;
+  Player? _player;
   VideoController? _controller;
 
   bool _hasError = false;
@@ -33,36 +33,55 @@ class _VideoPlayerViewState extends State<VideoPlayerView> {
   @override
   void initState() {
     super.initState();
-    _initPlayer();
+    _checkAndInitPlayer();
+  }
+
+  Future<void> _checkAndInitPlayer() async {
+    // Check if file exists before initializing
+    final file = File(widget.file.path);
+    if (!file.existsSync()) {
+      if (mounted) {
+        setState(() {
+          _hasError = true;
+          _errorMessage = 'File not found or deleted';
+          _ready = false;
+        });
+      }
+      return;
+    }
+
+    // Check if file is empty
+    final length = await file.length();
+    if (length == 0) {
+      if (mounted) {
+        setState(() {
+          _hasError = true;
+          _errorMessage = 'File is empty';
+          _ready = false;
+        });
+      }
+      return;
+    }
+
+    // File exists and is not empty, initialize player
+    await _initPlayer();
   }
 
   Future<void> _initPlayer() async {
     try {
-      // 1. Verify file exists and is not empty
-      final f = File(widget.file.path);
-      if (!f.existsSync()) {
-        _setError('File not found');
-        return;
-      }
-      final length = await f.length();
-      if (length == 0) {
-        _setError('File is empty');
-        return;
-      }
-
       // 2. Configure audio session for background playback
       final session = await AudioSession.instance;
       await session.configure(const AudioSessionConfiguration.music());
 
       // 3. Create player and controller
       _player = Player();
-      _controller = VideoController(_player);
+      _controller = VideoController(_player!);
 
       // 4. Open media
-      await _player.open(Media(widget.file.path));
+      await _player!.open(Media(widget.file.path));
 
       // 5. Wait until we have a valid duration (metadata loaded)
-      await _player.stream.duration.firstWhere(
+      await _player!.stream.duration.firstWhere(
         (d) => d.inMilliseconds > 0,
       );
 
@@ -83,7 +102,7 @@ class _VideoPlayerViewState extends State<VideoPlayerView> {
 
   @override
   void dispose() {
-    _player.dispose();
+    _player?.dispose();
     super.dispose();
   }
 

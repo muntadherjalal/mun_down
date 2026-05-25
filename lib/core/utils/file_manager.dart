@@ -3,7 +3,7 @@ import 'dart:io';
 
 import 'package:path_provider/path_provider.dart';
 
-import '../../../features/downloader/domain/entities/download_entity.dart';
+import '../../../features/downloader/domain/entities/download_metadata.dart';
 import '../../../features/downloader/data/models/download_metadata_model.dart';
 
 /// Information combining the file and its metadata.

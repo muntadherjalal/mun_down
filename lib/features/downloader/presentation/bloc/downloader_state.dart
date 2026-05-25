@@ -58,10 +58,10 @@ final class DownloaderCompletedState extends DownloaderState {
 
 /// Download failed.
 final class DownloaderFailedState extends DownloaderState {
-  final String message;
+  final Failure failure;
 
-  const DownloaderFailedState({required this.message});
+  const DownloaderFailedState({required this.failure});
 
   @override
-  List<Object?> get props => [message];
+  List<Object?> get props => [failure];
 }

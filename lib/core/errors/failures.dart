@@ -28,3 +28,28 @@ class CacheFailure extends Failure {
 class NetworkFailure extends Failure {
   const NetworkFailure({super.message = 'No internet connection'});
 }
+
+/// Returned when input validation fails.
+class ValidationFailure extends Failure {
+  const ValidationFailure({required super.message});
+}
+
+/// Returned when there is not enough storage space.
+class StorageFailure extends Failure {
+  const StorageFailure({required super.message});
+}
+
+/// Returned when the app lacks necessary permissions.
+class PermissionFailure extends Failure {
+  const PermissionFailure({required super.message});
+}
+
+/// Returned when a request times out.
+class TimeoutFailure extends Failure {
+  const TimeoutFailure({required super.message});
+}
+
+/// Returned when the file format is unsupported or corrupted.
+class FormatFailure extends Failure {
+  const FormatFailure({required super.message});
+}

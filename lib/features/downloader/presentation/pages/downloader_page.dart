@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 
 import '../../../../core/themes/app_theme.dart';
+import '../../../../core/errors/failures.dart';
 import '../../domain/entities/download_entity.dart';
 import '../bloc/downloader_bloc.dart';
 
@@ -58,12 +59,24 @@ class _DownloaderPageState extends State<DownloaderPage>
   }
 
   Widget _buildStateContent(BuildContext context, DownloaderState state) {
-    if (state is DownloaderInitialState) return _buildEmptyState();
-    if (state is DownloaderFetchingState) return _buildFetchingCard();
-    if (state is DownloaderProgressState) return _buildProgressCard(context, state.entity);
-    if (state is DownloaderPausedState) return _buildPausedCard(context, state.entity);
-    if (state is DownloaderCompletedState) return _buildCompletedCard(context, state.entity);
-    if (state is DownloaderFailedState) return _buildFailedCard(context, state.message);
+    if (state is DownloaderInitialState) {
+      return _buildEmptyState();
+    }
+    if (state is DownloaderFetchingState) {
+      return _buildFetchingCard();
+    }
+    if (state is DownloaderProgressState) {
+      return _buildProgressCard(context, state.entity);
+    }
+    if (state is DownloaderPausedState) {
+      return _buildPausedCard(context, state.entity);
+    }
+    if (state is DownloaderCompletedState) {
+      return _buildCompletedCard(context, state.entity);
+    }
+    if (state is DownloaderFailedState) {
+      return _buildFailedCard(context, state.failure);
+    }
     return const SizedBox.shrink();
   }
 
@@ -296,7 +309,35 @@ class _DownloaderPageState extends State<DownloaderPage>
     ]);
   }
 
-  Widget _buildFailedCard(BuildContext context, String message) {
+  Widget _buildFailedCard(BuildContext context, Failure failure) {
+    // Determine icon and title based on failure type
+    late IconData icon;
+    late String title;
+
+    if (failure is NetworkFailure) {
+      icon = Icons.wifi_off;
+      title = 'No Internet Connection';
+    } else if (failure is StorageFailure) {
+      icon = Icons.storage;
+      title = 'Insufficient Storage';
+    } else if (failure is PermissionFailure) {
+      icon = Icons.lock;
+      title = 'Permission Denied';
+    } else if (failure is ValidationFailure) {
+      icon = Icons.error;
+      title = 'Invalid Input';
+    } else if (failure is FormatFailure) {
+      icon = Icons.format_align_left;
+      title = 'Unsupported Format';
+    } else if (failure is TimeoutFailure) {
+      icon = Icons.access_time;
+      title = 'Request Timeout';
+    } else {
+      // For ServerFailure or any other
+      icon = Icons.cloud_off;
+      title = 'Server Error';
+    }
+
     return ListView(padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 16), children: [
       Container(
         key: const ValueKey('failed'),
@@ -307,12 +348,12 @@ class _DownloaderPageState extends State<DownloaderPage>
         ),
         child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
           Row(crossAxisAlignment: CrossAxisAlignment.start, children: [
-            Container(width: 56, height: 56, decoration: BoxDecoration(color: AppTheme.kErrorRed.withAlpha(20), borderRadius: BorderRadius.circular(12)), child: const Icon(Icons.error_outline_rounded, color: AppTheme.kErrorRed, size: 28)),
+            Container(width: 56, height: 56, decoration: BoxDecoration(color: AppTheme.kErrorRed.withAlpha(20), borderRadius: BorderRadius.circular(12)), child: Icon(icon, color: AppTheme.kErrorRed, size: 28)),
             const SizedBox(width: 16),
             Expanded(child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-              Text('Download Failed', style: TextStyle(color: AppTheme.onSurface(context), fontSize: 15, fontWeight: FontWeight.w600)),
+              Text(title, style: TextStyle(color: AppTheme.onSurface(context), fontSize: 15, fontWeight: FontWeight.w600)),
               const SizedBox(height: 6),
-              Text(message, style: TextStyle(color: AppTheme.dimText(context), fontSize: 13), maxLines: 2, overflow: TextOverflow.ellipsis),
+              Text(failure.message, style: TextStyle(color: AppTheme.dimText(context), fontSize: 13), maxLines: 2, overflow: TextOverflow.ellipsis),
             ])),
           ]),
           const SizedBox(height: 24),

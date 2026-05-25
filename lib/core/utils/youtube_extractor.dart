@@ -116,8 +116,14 @@ class YouTubeExtractor {
   /// Returns a list sorted lowest -> highest for video,
   /// then audio-only options (highest bitrate first).
   Future<List<StreamOption>> extractStreams(String url) async {
-    final video = await _yt.videos.get(url);
-    final manifest = await _yt.videos.streamsClient.getManifest(video.id);
+    final video = await _yt.videos.get(url).timeout(
+      const Duration(seconds: 15),
+      onTimeout: () => throw TimeoutException('YouTube video request timed out after 15 seconds'),
+    );
+    final manifest = await _yt.videos.streamsClient.getManifest(video.id).timeout(
+      const Duration(seconds: 15),
+      onTimeout: () => throw TimeoutException('YouTube manifest request timed out after 15 seconds'),
+    );
     final title = video.title;
     final author = video.author;
     final duration = video.duration;
@@ -254,7 +260,10 @@ class YouTubeExtractor {
     void Function(int received, int total)? onProgress,
     CancelToken? cancelToken,
   }) async {
-    final manifest = await _yt.videos.streamsClient.getManifest(videoId);
+    final manifest = await _yt.videos.streamsClient.getManifest(videoId).timeout(
+      const Duration(seconds: 15),
+      onTimeout: () => throw TimeoutException('YouTube manifest request timed out after 15 seconds'),
+    );
     StreamInfo? selected;
     for (final s in manifest.streams) {
       if (s.tag == itag) {

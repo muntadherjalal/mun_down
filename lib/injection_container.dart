@@ -4,6 +4,7 @@ import 'package:get_it/get_it.dart';
 import 'core/network/network_info.dart';
 import 'core/utils/constants.dart';
 import 'core/utils/youtube_extractor.dart';
+import 'features/downloader/data/datasources/downloader_local_data_source.dart';
 import 'features/downloader/data/datasources/downloader_remote_data_source.dart';
 import 'features/downloader/data/repositories/downloader_repository_impl.dart';
 import 'features/downloader/domain/repositories/downloader_repository.dart';
@@ -55,10 +56,16 @@ Future<void> init() async {
       extractor: sl<YouTubeExtractor>(),
     ),
   );
+  sl.registerLazySingleton<DownloaderLocalDataSource>(
+    () => DownloaderLocalDataSourceImpl(sl<SharedPreferences>()),
+  );
 
   // Repositories
   sl.registerLazySingleton<DownloaderRepository>(
-    () => DownloaderRepositoryImpl(remoteDataSource: sl()),
+    () => DownloaderRepositoryImpl(
+      remoteDataSource: sl(),
+      localDataSource: sl(),
+    ),
   );
 
   // BLoC

@@ -33,7 +33,7 @@ dependencies:
   webview_flutter_android: ^4.0.0
 
   # YouTube Media Extraction
-  youtube_explode_dart: ^2.3.9
+  youtube_explode_dart: ^2.4.0
 
   # File Actions
   share_plus: ^10.1.4

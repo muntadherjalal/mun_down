@@ -6,8 +6,12 @@ import 'package:equatable/equatable.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 
 import '../../../../core/network/network_info.dart';
+import '../../../../core/errors/exceptions.dart';
+import '../../../../core/errors/failures.dart';
 import '../../domain/entities/download_entity.dart';
+import '../../domain/entities/download_metadata.dart';
 import '../../domain/repositories/downloader_repository.dart';
+import 'dart:io';
 
 part 'downloader_event.dart';
 part 'downloader_state.dart';
@@ -32,6 +36,9 @@ class DownloaderBloc extends Bloc<DownloaderEvent, DownloaderState> {
   /// Stores the path to the partially downloaded file.
   String? _lastSavePath;
 
+  /// Stores the last failure for failed state mapping.
+  Failure? _lastFailure;
+
   DownloaderBloc({
     required DownloaderRepository repository,
     required NetworkInfo networkInfo,
@@ -43,12 +50,16 @@ class DownloaderBloc extends Bloc<DownloaderEvent, DownloaderState> {
     on<NetworkDroppedEvent>(_onNetworkDropped);
     on<PauseDownloadEvent>(_onPause);
     on<ResumeDownloadEvent>(_onResume);
+    on<InitializeFromSavedDownloadsEvent>(_onInitializeFromSavedDownloads);
 
     _networkSubscription = _networkInfo.onConnectivityChanged.listen((results) {
       if (!results.any((r) => r != ConnectivityResult.none)) {
         add(const NetworkDroppedEvent());
       }
     });
+
+    // Initialize from saved downloads when the BLoC is created
+    add(const InitializeFromSavedDownloadsEvent());
   }
 
   @override
@@ -66,9 +77,12 @@ class DownloaderBloc extends Bloc<DownloaderEvent, DownloaderState> {
     StartDownloadEvent event,
     Emitter<DownloaderState> emit,
   ) async {
+    // Reset last failure on new download attempt
+    _lastFailure = null;
+
     final hasConnection = await _networkInfo.isConnected;
     if (!hasConnection) {
-      emit(const DownloaderFailedState(message: 'No internet connection'));
+      emit(DownloaderFailedState(failure: NetworkFailure()));
       return;
     }
 
@@ -100,12 +114,72 @@ class DownloaderBloc extends Bloc<DownloaderEvent, DownloaderState> {
         // Silent completion: notify Library to refresh without navigation.
         if (mappedState is DownloaderCompletedState) {
           _lastSavePath = null; // Clear path on success
+          _lastFailure = null; // Clear failure on success
         }
 
         return mappedState;
       },
-      onError: (error, _) => DownloaderFailedState(message: error.toString()),
+      onError: (error, _) {
+        // Map exceptions to appropriate Failure types and store for failed state
+        Failure failure;
+        if (error is ServerException) {
+          failure = ServerFailure(message: error.message, statusCode: error.statusCode);
+        } else if (error is SocketException) {
+          failure = NetworkFailure(message: 'No internet connection');
+        } else if (error is FormatException) {
+          failure = ValidationFailure(message: 'Invalid data format');
+        } else {
+          failure = ServerFailure(message: error.toString());
+        }
+        _lastFailure = failure;
+        return DownloaderFailedState(failure: failure);
+      },
     );
+  }
+
+  void _onInitializeFromSavedDownloads(
+    InitializeFromSavedDownloadsEvent event,
+    Emitter<DownloaderState> emit,
+  ) async {
+    // Initialize from saved downloads
+    final savedDownloads = await _repository.getSavedDownloads();
+    if (savedDownloads.isNotEmpty) {
+      // For now, we'll just show the first saved download as an example
+      // In a real implementation, we might want to show all saved downloads
+      // or restore the most recent one
+      final firstDownload = savedDownloads.first;
+
+      // Create a FileMetadata object for the download
+      final fileMetadata = FileMetadata(
+        title: firstDownload.title,
+        thumbnailUrl: firstDownload.thumbnailUrl,
+        author: 'Unknown',
+        duration: null,
+        sourceUrl: firstDownload.originalUrl,
+        downloadedAt: DateTime.now(),
+        fileSizeBytes: firstDownload.totalBytes,
+        format: 'mp4', // default format
+        quality: 'unknown',
+      );
+
+      // We need to get the metadata to properly initialize
+      // For simplicity in this example, we'll create a basic metadata object
+      // A more complete implementation would store/load the metadata as well
+      final metadata = DownloadMetadata(
+        fileMetadata: fileMetadata,
+        youtubeMetadata: null, // Not a YouTube download by default
+      );
+
+      // Set the last known state for resume functionality
+      _lastEntity = firstDownload;
+      _lastUrl = firstDownload.originalUrl;
+      _lastMetadata = metadata;
+      _lastSavePath = firstDownload.savePath;
+
+      // Emit the appropriate state based on the download status
+      emit(_mapEntityToState(firstDownload));
+    }
+    // If no saved downloads, remain in initial state
   }
 
   void _onReset(ResetDownloaderEvent event, Emitter<DownloaderState> emit) {
@@ -115,6 +189,7 @@ class DownloaderBloc extends Bloc<DownloaderEvent, DownloaderState> {
     _lastUrl = null;
     _lastMetadata = null;
     _lastSavePath = null;
+    _lastFailure = null;
     emit(const DownloaderInitialState());
   }
 
@@ -129,7 +204,7 @@ class DownloaderBloc extends Bloc<DownloaderEvent, DownloaderState> {
       if (_lastEntity != null) {
         emit(DownloaderPausedState(entity: _lastEntity!));
       } else {
-        emit(const DownloaderFailedState(message: 'Internet connection lost.'));
+        emit(DownloaderFailedState(failure: NetworkFailure()));
       }
     }
   }
@@ -175,8 +250,8 @@ class DownloaderBloc extends Bloc<DownloaderEvent, DownloaderState> {
       DownloadStatus.downloading => DownloaderProgressState(entity: entity),
       DownloadStatus.paused => DownloaderPausedState(entity: entity),
       DownloadStatus.completed => DownloaderCompletedState(entity: entity),
-      DownloadStatus.failed => const DownloaderFailedState(
-        message: 'Download failed',
+      DownloadStatus.failed => DownloaderFailedState(
+        failure: _lastFailure ?? ServerFailure(message: 'Download failed'),
       ),
     };
   }

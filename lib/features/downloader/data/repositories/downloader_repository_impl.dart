@@ -1,10 +1,15 @@
 import 'dart:async';
+import 'dart:io';
 
 import '../../../../core/errors/exceptions.dart';
+import '../../../../core/errors/failures.dart';
 import '../../domain/entities/download_entity.dart';
+import '../../domain/entities/download_metadata.dart';
 import '../../domain/repositories/downloader_repository.dart';
 import '../datasources/downloader_remote_data_source.dart';
+import '../datasources/downloader_local_data_source.dart';
 import '../models/download_model.dart';
+import '../models/persistent_download.dart';
 
 /// Concrete implementation of [DownloaderRepository].
 ///
@@ -13,8 +18,12 @@ import '../models/download_model.dart';
 /// [DownloadStatus.failed].
 class DownloaderRepositoryImpl implements DownloaderRepository {
   final DownloaderRemoteDataSource remoteDataSource;
+  final DownloaderLocalDataSource localDataSource;
 
-  DownloaderRepositoryImpl({required this.remoteDataSource});
+  DownloaderRepositoryImpl({
+    required this.remoteDataSource,
+    required this.localDataSource,
+  });
 
   @override
   Stream<DownloadEntity> startDownload(
@@ -36,28 +45,46 @@ class DownloaderRepositoryImpl implements DownloaderRepository {
               sink.add(model);
             },
             handleError: (error, stackTrace, sink) {
-              // Map data-layer exceptions into a failed entity so the
-              // presentation layer always receives a clean domain object
-              // instead of a raw exception.
-              final message = error is ServerException
-                  ? error.message
-                  : error.toString();
+              // Map data-layer exceptions to appropriate Failures
+              Failure failure;
+              if (error is ServerException) {
+                failure = ServerFailure(message: error.message, statusCode: error.statusCode);
+              } else if (error is SocketException) {
+                failure = NetworkFailure(message: 'No internet connection');
+              } else if (error is FormatException) {
+                failure = ValidationFailure(message: 'Invalid data format');
+              } else {
+                failure = ServerFailure(message: error.toString());
+              }
 
-              sink.add(
-                DownloadModel(
-                  id: DateTime.now().millisecondsSinceEpoch.toString(),
-                  originalUrl: url,
-                  title: '',
-                  progress: 0,
-                  savePath: '',
-                  status: DownloadStatus.failed,
-                ),
-              );
-
-              // Also forward as an error so the BLoC's onError fires if needed.
-              sink.addError(Exception(message), stackTrace);
+              // Forward the Failure so BLoC can handle it properly
+              sink.addError(failure, stackTrace);
             },
           ),
         );
+  }
+
+  @override
+  Future<void> saveDownloadState(String id, DownloadEntity entity, DownloadMetadata metadata) async {
+    final persistentDownload = PersistentDownload.fromEntityAndMetadata(entity, metadata);
+    await localDataSource.saveDownloadState(persistentDownload);
+  }
+
+  @override
+  Future<List<DownloadEntity>> getSavedDownloads() async {
+    final persistentDownloads = await localDataSource.getSavedDownloads();
+    return persistentDownloads
+        .map((persistentDownload) => persistentDownload.toEntity())
+        .toList();
+  }
+
+  @override
+  Future<void> deleteDownloadState(String id) async {
+    await localDataSource.deleteDownloadState(id);
+  }
+
+  @override
+  Future<void> clearAllDownloads() async {
+    await localDataSource.clearAllDownloads();
   }
 }

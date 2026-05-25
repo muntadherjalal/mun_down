@@ -12,6 +12,7 @@ import '../../../../core/errors/exceptions.dart';
 import '../../../../core/utils/file_manager.dart';
 import '../../../../core/utils/youtube_extractor.dart';
 import '../../domain/entities/download_entity.dart';
+import '../../domain/entities/download_metadata.dart';
 import '../models/download_model.dart';
 import '../models/download_metadata_model.dart';
 
@@ -367,6 +368,9 @@ class DownloaderRemoteDataSourceImpl implements DownloaderRemoteDataSource {
             videoTotal = tot;
             emitCombined();
           },
+        ).timeout(
+          const Duration(minutes: 2),
+          onTimeout: () => throw TimeoutException('YouTube video download timed out after 2 minutes'),
         );
 
         await extractor.downloadStream(
@@ -379,6 +383,9 @@ class DownloaderRemoteDataSourceImpl implements DownloaderRemoteDataSource {
             audioTotal = tot;
             emitCombined();
           },
+        ).timeout(
+          const Duration(minutes: 2),
+          onTimeout: () => throw TimeoutException('YouTube audio download timed out after 2 minutes'),
         );
 
         // Indicate muxing phase to the UI.
