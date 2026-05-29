@@ -1,6 +1,6 @@
 import 'package:flutter/material.dart';
 import '../../../../core/themes/app_theme.dart';
-import '../../../../core/utils/file_manager.dart';
+import '../../domain/entities/downloaded_file_info.dart';
 import 'meta_chip.dart';
 
 class FileListCard extends StatelessWidget {

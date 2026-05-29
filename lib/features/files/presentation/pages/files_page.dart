@@ -5,6 +5,7 @@ import 'package:share_plus/share_plus.dart';
 import '../../../../core/themes/app_theme.dart';
 import '../../../../core/utils/biometric_helper.dart';
 import '../../../../core/utils/file_manager.dart';
+import '../../domain/entities/downloaded_file_info.dart';
 import '../../../../injection_container.dart';
 // غيرنا الاستيراد حتى يقرأ صفحة المشغل الأساسية
 import '../widgets/video_player_view.dart';

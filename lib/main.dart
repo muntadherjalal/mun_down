@@ -2,8 +2,8 @@ import 'package:flutter/material.dart';
 import 'package:media_kit/media_kit.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
+import 'core/services/background_task_service.dart';
 import 'core/themes/app_theme.dart';
-import 'core/utils/youtube_extractor.dart';
 import 'features/home/presentation/pages/main_scaffold.dart';
 import 'injection_container.dart' as di;
 
@@ -15,6 +15,9 @@ void main() async {
 
   // Initialize dependency injection
   await di.init();
+
+  // Initialize background task service
+  await BackgroundTaskService.initialize();
 
   // Load persisted theme preference (with one-time migration from legacy 'dark_mode' bool)
   final prefs = await SharedPreferences.getInstance();
@@ -73,14 +76,6 @@ class MunDownAppState extends State<MunDownApp> with WidgetsBindingObserver {
   void dispose() {
     WidgetsBinding.instance.removeObserver(this);
     super.dispose();
-  }
-
-  @override
-  void didChangeAppLifecycleState(AppLifecycleState state) {
-    if (state == AppLifecycleState.detached) {
-      di.sl<YouTubeExtractor>().dispose();
-    }
-    super.didChangeAppLifecycleState(state);
   }
 
   ThemeMode get themeMode => _themeMode;

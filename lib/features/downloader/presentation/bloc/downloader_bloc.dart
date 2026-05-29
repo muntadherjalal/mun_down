@@ -1,7 +1,7 @@
 import 'dart:async';
+import 'dart:io';
 
 import 'package:connectivity_plus/connectivity_plus.dart';
-import 'package:dio/dio.dart';
 import 'package:equatable/equatable.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 
@@ -11,7 +11,6 @@ import '../../../../core/errors/failures.dart';
 import '../../domain/entities/download_entity.dart';
 import '../../domain/entities/download_metadata.dart';
 import '../../domain/repositories/downloader_repository.dart';
-import 'dart:io';
 
 part 'downloader_event.dart';
 part 'downloader_state.dart';
@@ -24,7 +23,6 @@ class DownloaderBloc extends Bloc<DownloaderEvent, DownloaderState> {
   final DownloaderRepository _repository;
   final NetworkInfo _networkInfo;
   StreamSubscription<List<ConnectivityResult>>? _networkSubscription;
-  CancelToken? _cancelToken;
 
   /// Stores the last known entity snapshot for pause/resume.
   DownloadEntity? _lastEntity;
@@ -65,7 +63,10 @@ class DownloaderBloc extends Bloc<DownloaderEvent, DownloaderState> {
   @override
   Future<void> close() {
     _networkSubscription?.cancel();
-    _cancelToken?.cancel();
+    // Cancel any ongoing download to prevent leaks
+    if (_lastUrl != null) {
+      _repository.cancelDownload(_lastUrl!);
+    }
     return super.close();
   }
 
@@ -86,7 +87,6 @@ class DownloaderBloc extends Bloc<DownloaderEvent, DownloaderState> {
       return;
     }
 
-    _cancelToken = CancelToken();
     _lastUrl = event.url;
     _lastMetadata = event.metadata;
 
@@ -100,7 +100,6 @@ class DownloaderBloc extends Bloc<DownloaderEvent, DownloaderState> {
       _repository.startDownload(
         event.url,
         metadata: event.metadata,
-        cancelToken: _cancelToken,
         existingSavePath: _lastSavePath, // Pass the path to engine
       ),
       onData: (entity) {
@@ -183,8 +182,10 @@ class DownloaderBloc extends Bloc<DownloaderEvent, DownloaderState> {
   }
 
   void _onReset(ResetDownloaderEvent event, Emitter<DownloaderState> emit) {
-    _cancelToken?.cancel();
-    _cancelToken = null;
+    // Cancel any ongoing download
+    if (_lastUrl != null) {
+      _repository.cancelDownload(_lastUrl!);
+    }
     _lastEntity = null;
     _lastUrl = null;
     _lastMetadata = null;
@@ -199,8 +200,9 @@ class DownloaderBloc extends Bloc<DownloaderEvent, DownloaderState> {
   ) {
     if (state is DownloaderProgressState || state is DownloaderFetchingState) {
       // Pause instead of failing so the file is kept
-      _cancelToken?.cancel();
-      _cancelToken = null;
+      if (_lastUrl != null) {
+        _repository.cancelDownload(_lastUrl!);
+      }
       if (_lastEntity != null) {
         emit(DownloaderPausedState(entity: _lastEntity!));
       } else {
@@ -211,8 +213,9 @@ class DownloaderBloc extends Bloc<DownloaderEvent, DownloaderState> {
 
   void _onPause(PauseDownloadEvent event, Emitter<DownloaderState> emit) {
     if (state is DownloaderProgressState) {
-      _cancelToken?.cancel();
-      _cancelToken = null;
+      if (_lastUrl != null) {
+        _repository.pauseDownload(_lastUrl!);
+      }
       final entity = _lastEntity;
       if (entity != null) {
         emit(DownloaderPausedState(entity: entity));

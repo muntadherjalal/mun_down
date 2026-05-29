@@ -14,10 +14,15 @@ abstract class DownloaderRepository {
   /// Consumers should listen until the stream closes.
   Stream<DownloadEntity> startDownload(
     String url, {
-    dynamic metadata,
-    dynamic cancelToken,
+    DownloadMetadata? metadata,
     String? existingSavePath,
   });
+
+  /// Pauses the download for the given [url].
+  Future<void> pauseDownload(String url);
+
+  /// Cancels the download for the given [url].
+  Future<void> cancelDownload(String url);
 
   /// Saves the current state of a download for persistence.
   Future<void> saveDownloadState(String id, DownloadEntity entity, DownloadMetadata metadata);

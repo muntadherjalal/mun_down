@@ -1,0 +1,9 @@
+- [Architectural Pivot to Cobalt API](user_architectural_pivot_cobalt_api.md) — Transitioned from client-side YouTube extraction to Universal Server-Side API Architecture using Cobalt API
+- [Cleanup Complete](user_cleanup_complete.md) — Removed all YouTube dependencies and references, verified no dangling imports
+- [Background Task Service Implementation](lib/core/services/background_task_service.dart) — Implemented workmanager-based background downloads with resumable support
+- [Main App Initialization Update](lib/main.dart) — Added BackgroundTaskService initialization before runApp()
+- [Start Download Use Case Test](test/features/downloader/domain/usecases/start_download_usecase_test.dart) — Unit test verifying repository interaction (Phase 2 complete)
+- [File Manager Isolate Optimization](lib/core/utils/file_manager.dart) — Uses Isolate.run() to prevent main thread blocking (Phase 1 complete)
+- [Background Task Service Test](test/core/services/background_task_service_test.dart) — Basic test for background task service (Phase 3 complete)
+- [Downloader Remote Data Source Fixes](lib/features/downloader/data/datasources/downloader_remote_data_source.dart) — Fixed lint warnings and improved error handling for Cobalt API integration
+- [Enterprise Roadmap Completion](IMPLEMENTATION_COMPLETE.md) — All three phases of the Enterprise Roadmap implemented (Performance, Reliability, Background Downloads)

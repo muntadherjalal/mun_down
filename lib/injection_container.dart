@@ -3,7 +3,6 @@ import 'package:get_it/get_it.dart';
 
 import 'core/network/network_info.dart';
 import 'core/utils/constants.dart';
-import 'core/utils/youtube_extractor.dart';
 import 'features/downloader/data/datasources/downloader_local_data_source.dart';
 import 'features/downloader/data/datasources/downloader_remote_data_source.dart';
 import 'features/downloader/data/repositories/downloader_repository_impl.dart';
@@ -43,7 +42,6 @@ Future<void> init() async {
     return dio;
   });
 
-  sl.registerLazySingleton<YouTubeExtractor>(() => YouTubeExtractor());
 
   //──────────────────────────────────────────────────────────
   // Features — Downloader
@@ -53,7 +51,6 @@ Future<void> init() async {
   sl.registerLazySingleton<DownloaderRemoteDataSource>(
     () => DownloaderRemoteDataSourceImpl(
       dio: sl<Dio>(),
-      extractor: sl<YouTubeExtractor>(),
     ),
   );
   sl.registerLazySingleton<DownloaderLocalDataSource>(

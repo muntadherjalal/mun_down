@@ -3,14 +3,10 @@ import 'dart:convert';
 import 'dart:io';
 
 import 'package:dio/dio.dart';
-import 'package:ffmpeg_kit_flutter_new/ffmpeg_kit.dart';
-import 'package:ffmpeg_kit_flutter_new/return_code.dart';
-import 'package:path_provider/path_provider.dart';
 import 'package:permission_handler/permission_handler.dart';
 
 import '../../../../core/errors/exceptions.dart';
 import '../../../../core/utils/file_manager.dart';
-import '../../../../core/utils/youtube_extractor.dart';
 import '../../domain/entities/download_entity.dart';
 import '../../domain/entities/download_metadata.dart';
 import '../models/download_model.dart';
@@ -22,29 +18,26 @@ abstract class DownloaderRemoteDataSource {
   /// reflecting the current progress and status.
   Stream<DownloadModel> downloadFile(
     String url, {
-    dynamic metadata,
-    dynamic cancelToken,
+    DownloadMetadata? metadata,
+    CancelToken? cancelToken,
     String? existingSavePath,
   });
 }
 
 /// Concrete implementation backed by [Dio] for generic URLs and the
-/// `youtube_explode_dart` library for YouTube streams.
+/// Cobalt API for universal media downloading.
 ///
-/// - For YouTube downloads (metadata.videoId + metadata.itag are set), the
-///   download is routed through [YouTubeExtractor.downloadStream], which
-///   uses the library's own HTTP client. This avoids 403 errors caused by
-///   client-mismatched UAs and signed-URL expiration.
-/// - For non-YouTube URLs, falls back to [Dio] with retry+backoff.
-/// - When [DownloadMetadata.needsMux] is true, downloads video-only and
-///   audio-only streams separately, then merges them with ffmpeg.
+/// - For all URLs (YouTube, TikTok, Instagram, etc.), the download is routed
+///   through the Cobalt API which returns a direct download URL.
+/// - The direct URL is then downloaded using [Dio] with retry+backoff.
+/// - When [DownloadMetadata.needsMux] is true (legacy), this is now handled
+///   by the Cobalt API itself (which returns muxed streams), so no ffmpeg
+///   merging is needed.
 class DownloaderRemoteDataSourceImpl implements DownloaderRemoteDataSource {
   final Dio dio;
-  final YouTubeExtractor extractor;
 
   DownloaderRemoteDataSourceImpl({
     required this.dio,
-    required this.extractor,
   });
 
   /// Headers sent with non-YouTube generic media downloads. Mimicking a
@@ -59,12 +52,13 @@ class DownloaderRemoteDataSourceImpl implements DownloaderRemoteDataSource {
   };
 
   static const int _maxRetries = 3;
+  static const String _cobaltApiUrl = 'https://api.cobalt.tools/api/json';
 
   @override
   Stream<DownloadModel> downloadFile(
     String url, {
-    dynamic metadata,
-    dynamic cancelToken,
+    DownloadMetadata? metadata,
+    CancelToken? cancelToken,
     String? existingSavePath,
   }) {
     final controller = StreamController<DownloadModel>();
@@ -87,8 +81,8 @@ class DownloaderRemoteDataSourceImpl implements DownloaderRemoteDataSource {
   Future<void> _performDownload(
     String url,
     StreamController<DownloadModel> controller, {
-    dynamic metadata,
-    dynamic cancelToken,
+    DownloadMetadata? metadata,
+    CancelToken? cancelToken,
     String? existingSavePath,
   }) async {
     final id = DateTime.now().millisecondsSinceEpoch.toString();
@@ -132,12 +126,8 @@ class DownloaderRemoteDataSourceImpl implements DownloaderRemoteDataSource {
         final ext = _mapFormatToExtension(metadata.format, isAudio: isAudio);
         fileName = '$sanitizedTitle.$ext';
         thumbnailUrl = metadata.thumbnailUrl;
-      } else if (metadata != null && (metadata as dynamic).title != null) {
-        fileName = await _resolveFileName(
-          url,
-          hintTitle: (metadata as dynamic).title as String?,
-        );
       } else {
+        // metadata is null
         fileName = await _resolveFileName(url);
       }
 
@@ -156,43 +146,24 @@ class DownloaderRemoteDataSourceImpl implements DownloaderRemoteDataSource {
 
       controller.add(baseModel);
 
-      // ── Phase 2: Downloading ──────────────────────────────
-      final isYouTube = metadata is DownloadMetadata &&
-          (metadata.videoId?.isNotEmpty ?? false) &&
-          metadata.itag != null;
+      // ── Phase 2: Get direct download URL from Cobalt API ────────
+      final directUrl = await _fetchDirectDownloadUrlFromCobalt(
+        url: url,
+        metadata: metadata,
+        cancelToken: cancelToken,
+      );
 
-      if (isYouTube) {
-        await _downloadYouTube(
-          metadata: metadata,
-          savePath: savePath,
-          baseModel: baseModel,
-          controller: controller,
-          cancelToken: cancelToken as CancelToken?,
-          allowResume: existingSavePath != null,
-        );
-      } else if (metadata is DownloadMetadata &&
-          metadata.needsMux &&
-          (metadata.audioUrl?.isNotEmpty ?? false)) {
-        await _downloadAndMux(
-          videoUrl: url,
-          audioUrl: metadata.audioUrl!,
-          savePath: savePath,
-          baseModel: baseModel,
-          controller: controller,
-          cancelToken: cancelToken as CancelToken?,
-        );
-      } else {
-        await _downloadWithRetry(
-          url: url,
-          savePath: savePath,
-          baseModel: baseModel,
-          controller: controller,
-          cancelToken: cancelToken as CancelToken?,
-          allowResume: existingSavePath != null,
-        );
-      }
+      // ── Phase 3: Downloading from direct URL ──────────────────
+      await _downloadWithRetry(
+        url: directUrl,
+        savePath: savePath,
+        baseModel: baseModel,
+        controller: controller,
+        cancelToken: cancelToken,
+        allowResume: existingSavePath != null,
+      );
 
-      // ── Phase 3: Completed ────────────────────────────────
+      // ── Phase 4: Completed ────────────────────────────────
       if (metadata is DownloadMetadata) {
         try {
           final file = File('$savePath.json');
@@ -246,6 +217,143 @@ class DownloaderRemoteDataSourceImpl implements DownloaderRemoteDataSource {
     } finally {
       await controller.close();
     }
+  }
+
+  /// Calls the Cobalt API to get a direct download URL for the given [url].
+  ///
+  /// Handles Cobalt API response statuses:
+  /// - If status is "error": throws a [ServerException] with the message from the "text" field.
+  /// - If status is "redirect" or "tunnel": extracts the direct link from the "url" field.
+  /// - If status is "picker": extracts the direct link from the first item in the "picker" array.
+  /// - If status is "rate-limit": throws a [ServerException] indicating rate-limiting.
+  /// - If status is "stream": extracts the direct link from the "url" field (handled same as redirect).
+  Future<String> _fetchDirectDownloadUrlFromCobalt({
+    required String url,
+    required DownloadMetadata? metadata,
+    required CancelToken? cancelToken,
+  }) async {
+    // Determine download parameters from metadata
+    final bool isAudioOnly = metadata is DownloadMetadata &&
+        metadata.quality.toLowerCase().contains('kbps');
+
+    String? vQuality;
+    if (!isAudioOnly && metadata is DownloadMetadata) {
+      // Extract numeric resolution from quality string (e.g., "1080p" -> "1080")
+      final match = RegExp(r'(\d+)').firstMatch(metadata.quality);
+      if (match != null) {
+        vQuality = match.group(1);
+      } else {
+        vQuality = '1080'; // fallback to 1080p if not specified
+      }
+    }
+
+    // Build the Cobalt API request body
+    final requestBody = _buildCobaltRequestBody(
+      url: url,
+      isAudioOnly: isAudioOnly,
+      vQuality: vQuality,
+      aFormat: isAudioOnly ? metadata.format : null,
+    );
+
+    // Create a Dio instance specifically for Cobalt API calls with required headers
+    final cobaltDio = Dio(BaseOptions(
+      baseUrl: _cobaltApiUrl,
+      headers: {
+        'Content-Type': 'application/json',
+        'Accept': 'application/json',
+        'User-Agent': 'MunDownApp/1.5.0 (Android/iOS)',
+      },
+      receiveTimeout: const Duration(seconds: 30),
+      sendTimeout: const Duration(seconds: 30),
+    ));
+
+    try {
+      final response = await cobaltDio.post(
+        '',
+        data: jsonEncode(requestBody),
+        cancelToken: cancelToken,
+      );
+
+      if (response.statusCode != 200) {
+        throw ServerException(
+          message: 'Cobalt API returned status ${response.statusCode}',
+          statusCode: response.statusCode,
+        );
+      }
+
+      final responseData = response.data as Map<String, dynamic>;
+      final status = responseData['status'] as String?;
+
+      switch (status) {
+        case 'error':
+          final errorMessage = responseData['text'] as String? ??
+              'Unknown error from Cobalt API';
+          throw ServerException(message: errorMessage);
+        case 'redirect':
+        case 'tunnel':
+        case 'stream':
+          final directUrl = responseData['url'] as String?;
+          if (directUrl == null || directUrl.isEmpty) {
+            throw ServerException(message: 'Cobalt API returned empty URL');
+          }
+          return directUrl;
+        case 'picker':
+          final picker = responseData['picker'] as List<dynamic>?;
+          if (picker == null || picker.isEmpty) {
+            throw ServerException(message: 'Cobalt API picker array is empty');
+          }
+          final first = picker.first as Map<String, dynamic>?;
+          final directUrl = first?['url'] as String?;
+          if (directUrl == null || directUrl.isEmpty) {
+            throw ServerException(message: 'Cobalt API picker item has no URL');
+          }
+          return directUrl;
+        case 'rate-limit':
+          throw ServerException(
+              message: 'Cobalt API rate limit exceeded. Please try again later.');
+        default:
+          throw ServerException(
+              message: 'Cobalt API returned unknown status: $status');
+      }
+    } on DioException catch (e) {
+      if (e.type == DioExceptionType.cancel) rethrow;
+      final status = e.response?.statusCode;
+      final detail = e.response?.statusMessage ?? e.message;
+      final String errorDetail = detail ?? 'Network error';
+      // Handle specific error codes that Cobalt might return via Cloudflare or rate limiting
+      if (status == 403 || status == 429) {
+        throw ServerException(
+          message: 'Cobalt API access blocked or rate limited. Please try again later.',
+          statusCode: status,
+        );
+      }
+      throw ServerException(
+        message: status != null ? 'HTTP $status — $errorDetail' : errorDetail,
+        statusCode: status,
+      );
+    } finally {
+      cobaltDio.close();
+    }
+  }
+
+  /// Builds the request body for the Cobalt API according to its specification.
+  Map<String, dynamic> _buildCobaltRequestBody({
+    required String url,
+    required bool isAudioOnly,
+    String? vQuality,
+    String? aFormat,
+  }) {
+    final body = <String, dynamic>{
+      'url': url,
+      'downloadMode': 'auto', // Let Cobalt decide based on flags
+      'isAudioOnly': isAudioOnly,
+      if (vQuality != null && !isAudioOnly) 'vQuality': vQuality,
+      if (aFormat != null && isAudioOnly) 'aFormat': aFormat,
+    };
+    // Remove null values by creating a new map
+    return Map<String, dynamic>.fromEntries(
+      body.entries.where((entry) => entry.value != null),
+    );
   }
 
   /// Performs a single-file download with up to [_maxRetries] attempts and
@@ -310,276 +418,6 @@ class DownloaderRemoteDataSourceImpl implements DownloaderRemoteDataSource {
         lastError = e;
         if (attempt < _maxRetries) {
           // Exponential backoff: 1s, 2s, 4s
-          final delaySeconds = 1 << (attempt - 1);
-          await Future.delayed(Duration(seconds: delaySeconds));
-        }
-      }
-    }
-    throw lastError!;
-  }
-
-  /// Downloads a YouTube stream (or video-only + audio-only pair) through
-  /// `youtube_explode_dart`. The library re-fetches the manifest, signs the
-  /// request with the right client UA, and handles 403 retries internally —
-  /// none of which Dio can do reliably for googlevideo URLs.
-  Future<void> _downloadYouTube({
-    required DownloadMetadata metadata,
-    required String savePath,
-    required DownloadModel baseModel,
-    required StreamController<DownloadModel> controller,
-    required CancelToken? cancelToken,
-    required bool allowResume,
-  }) async {
-    final videoId = metadata.videoId!;
-    final itag = metadata.itag!;
-
-    if (metadata.needsMux && metadata.audioItag != null) {
-      // ── Two-leg download (video-only + audio-only) + ffmpeg mux ────
-      final tmpDir = await getTemporaryDirectory();
-      final stamp = DateTime.now().millisecondsSinceEpoch;
-      final videoTmp = '${tmpDir.path}/mun_video_$stamp.tmp';
-      final audioTmp = '${tmpDir.path}/mun_audio_$stamp.tmp';
-
-      int videoReceived = 0, videoTotal = 0;
-      int audioReceived = 0, audioTotal = 0;
-
-      void emitCombined() {
-        final total = videoTotal + audioTotal;
-        final received = videoReceived + audioReceived;
-        final progress = total > 0 ? (received / total).clamp(0.0, 1.0) : 0.0;
-        controller.add(
-          baseModel.copyWith(
-            status: DownloadStatus.downloading,
-            progress: progress,
-            receivedBytes: received,
-            totalBytes: total,
-          ),
-        );
-      }
-
-      try {
-        await extractor.downloadStream(
-          videoId: videoId,
-          itag: itag,
-          savePath: videoTmp,
-          cancelToken: cancelToken,
-          onProgress: (rcv, tot) {
-            videoReceived = rcv;
-            videoTotal = tot;
-            emitCombined();
-          },
-        ).timeout(
-          const Duration(minutes: 2),
-          onTimeout: () => throw TimeoutException('YouTube video download timed out after 2 minutes'),
-        );
-
-        await extractor.downloadStream(
-          videoId: videoId,
-          itag: metadata.audioItag!,
-          savePath: audioTmp,
-          cancelToken: cancelToken,
-          onProgress: (rcv, tot) {
-            audioReceived = rcv;
-            audioTotal = tot;
-            emitCombined();
-          },
-        ).timeout(
-          const Duration(minutes: 2),
-          onTimeout: () => throw TimeoutException('YouTube audio download timed out after 2 minutes'),
-        );
-
-        // Indicate muxing phase to the UI.
-        controller.add(
-          baseModel.copyWith(
-            status: DownloadStatus.downloading,
-            progress: 0.98,
-            receivedBytes: videoReceived + audioReceived,
-            totalBytes: videoTotal + audioTotal,
-          ),
-        );
-
-        final cmd =
-            '-y -i "$videoTmp" -i "$audioTmp" -c:v copy -c:a aac -movflags +faststart "$savePath"';
-        final session = await FFmpegKit.execute(cmd);
-        final returnCode = await session.getReturnCode();
-        if (!ReturnCode.isSuccess(returnCode)) {
-          final logs = await session.getAllLogsAsString();
-          throw ServerException(
-            message:
-                'Failed to merge video and audio: ${(logs ?? '').split('\n').last}',
-          );
-        }
-      } finally {
-        for (final p in [videoTmp, audioTmp]) {
-          try {
-            final f = File(p);
-            if (f.existsSync()) await f.delete();
-          } catch (_) {}
-        }
-      }
-    } else {
-      // ── Single-stream download (muxed video / audio-only) ──────────
-      // Skip-bytes resume: existing partial file is preserved; library
-      // re-fetches from byte 0 and discards already-saved bytes.
-      var startOffset = 0;
-      if (allowResume) {
-        final f = File(savePath);
-        if (f.existsSync()) startOffset = await f.length();
-      } else {
-        // Fresh download — wipe any leftover partial file so writeOnlyAppend
-        // doesn't accidentally append to an unrelated previous attempt.
-        final f = File(savePath);
-        if (f.existsSync()) {
-          try {
-            await f.delete();
-          } catch (_) {}
-        }
-      }
-
-      await extractor.downloadStream(
-        videoId: videoId,
-        itag: itag,
-        savePath: savePath,
-        startOffset: startOffset,
-        cancelToken: cancelToken,
-        onProgress: (rcv, tot) {
-          if (tot > 0) {
-            controller.add(
-              baseModel.copyWith(
-                progress: (rcv / tot).clamp(0.0, 1.0),
-                receivedBytes: rcv,
-                totalBytes: tot,
-              ),
-            );
-          } else {
-            controller.add(
-              baseModel.copyWith(
-                receivedBytes: rcv,
-                totalBytes: 0,
-              ),
-            );
-          }
-        },
-      );
-    }
-  }
-
-  /// Downloads video-only + audio-only streams and merges them with ffmpeg.
-  Future<void> _downloadAndMux({
-    required String videoUrl,
-    required String audioUrl,
-    required String savePath,
-    required DownloadModel baseModel,
-    required StreamController<DownloadModel> controller,
-    required CancelToken? cancelToken,
-  }) async {
-    final tmpDir = await getTemporaryDirectory();
-    final stamp = DateTime.now().millisecondsSinceEpoch;
-    final videoTmp = '${tmpDir.path}/mun_video_$stamp.tmp';
-    final audioTmp = '${tmpDir.path}/mun_audio_$stamp.tmp';
-
-    int videoReceived = 0, videoTotal = 0;
-    int audioReceived = 0, audioTotal = 0;
-
-    void emitCombined({DownloadStatus status = DownloadStatus.downloading}) {
-      final total = videoTotal + audioTotal;
-      final received = videoReceived + audioReceived;
-      final progress = total > 0 ? (received / total).clamp(0.0, 1.0) : 0.0;
-      controller.add(
-        baseModel.copyWith(
-          status: status,
-          progress: progress,
-          receivedBytes: received,
-          totalBytes: total,
-        ),
-      );
-    }
-
-    try {
-      // Download video & audio sequentially so we don't saturate bandwidth and
-      // get more accurate progress reporting.
-      await _downloadWithRetryRaw(
-        url: videoUrl,
-        savePath: videoTmp,
-        cancelToken: cancelToken,
-        onProgress: (rcv, tot) {
-          videoReceived = rcv;
-          videoTotal = tot;
-          emitCombined();
-        },
-      );
-
-      await _downloadWithRetryRaw(
-        url: audioUrl,
-        savePath: audioTmp,
-        cancelToken: cancelToken,
-        onProgress: (rcv, tot) {
-          audioReceived = rcv;
-          audioTotal = tot;
-          emitCombined();
-        },
-      );
-
-      // Muxing phase — emit a "fetching"-style update so the UI shows activity.
-      controller.add(
-        baseModel.copyWith(
-          status: DownloadStatus.downloading,
-          progress: 0.98,
-          receivedBytes: videoReceived + audioReceived,
-          totalBytes: videoTotal + audioTotal,
-        ),
-      );
-
-      final cmd =
-          '-y -i "$videoTmp" -i "$audioTmp" -c:v copy -c:a aac -movflags +faststart "$savePath"';
-      final session = await FFmpegKit.execute(cmd);
-      final returnCode = await session.getReturnCode();
-      if (!ReturnCode.isSuccess(returnCode)) {
-        final logs = await session.getAllLogsAsString();
-        throw ServerException(
-          message:
-              'Failed to merge video and audio: ${(logs ?? '').split('\n').last}',
-        );
-      }
-    } finally {
-      // Clean up temp files regardless of success/failure.
-      for (final p in [videoTmp, audioTmp]) {
-        try {
-          final f = File(p);
-          if (f.existsSync()) await f.delete();
-        } catch (_) {}
-      }
-    }
-  }
-
-  /// Lower-level retry helper used by the mux pipeline. Does not emit
-  /// [DownloadModel]s itself — caller aggregates progress via [onProgress].
-  Future<void> _downloadWithRetryRaw({
-    required String url,
-    required String savePath,
-    required CancelToken? cancelToken,
-    required void Function(int received, int total) onProgress,
-  }) async {
-    DioException? lastError;
-    for (var attempt = 1; attempt <= _maxRetries; attempt++) {
-      try {
-        await dio.download(
-          url,
-          savePath,
-          options: Options(
-            headers: _genericHeaders,
-            receiveTimeout: const Duration(seconds: 60),
-            responseType: ResponseType.bytes,
-          ),
-          cancelToken: cancelToken,
-          deleteOnError: true,
-          onReceiveProgress: (rcv, tot) => onProgress(rcv, tot < 0 ? 0 : tot),
-        );
-        return;
-      } on DioException catch (e) {
-        if (e.type == DioExceptionType.cancel) rethrow;
-        lastError = e;
-        if (attempt < _maxRetries) {
           final delaySeconds = 1 << (attempt - 1);
           await Future.delayed(Duration(seconds: delaySeconds));
         }

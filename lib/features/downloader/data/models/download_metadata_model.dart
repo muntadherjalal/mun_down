@@ -2,12 +2,9 @@ import '../../domain/entities/download_metadata.dart';
 
 class DownloadMetadataModel extends DownloadMetadata {
   const DownloadMetadataModel({
-    required FileMetadata fileMetadata,
-    YouTubeMetadata? youtubeMetadata,
-  }) : super(
-          fileMetadata: fileMetadata,
-          youtubeMetadata: youtubeMetadata,
-        );
+    required super.fileMetadata,
+    super.youtubeMetadata,
+  });
 
   factory DownloadMetadataModel.fromJson(Map<String, dynamic> json) =>
       DownloadMetadataModel(

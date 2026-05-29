@@ -6,7 +6,7 @@ import 'package:media_kit/media_kit.dart';
 import 'package:media_kit_video/media_kit_video.dart';
 
 import '../../../../core/themes/app_theme.dart';
-import '../../../../core/utils/file_manager.dart';
+import '../../domain/entities/downloaded_file_info.dart';
 
 /// Plays downloaded video or audio using media_kit (libmpv).
 ///

@@ -1,6 +1,5 @@
 import 'dart:io';
 
-import '../../../downloader/domain/entities/download_metadata.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:webview_flutter/webview_flutter.dart';
@@ -8,11 +7,8 @@ import 'package:webview_flutter_android/webview_flutter_android.dart';
 import 'package:webview_flutter_wkwebview/webview_flutter_wkwebview.dart';
 
 import '../../../../core/themes/app_theme.dart';
-import '../../../../core/utils/youtube_extractor.dart';
-import '../../../../injection_container.dart' as di;
 
 import '../../../downloader/presentation/bloc/downloader_bloc.dart';
-import '../../../downloader/presentation/widgets/quality_bottom_sheet.dart';
 import '../widgets/widgets.dart';
 
 class BrowserPage extends StatefulWidget {
@@ -33,7 +29,7 @@ class _BrowserPageState extends State<BrowserPage>
   bool _isLoading = false;
   String _currentUrl = '';
   final bool _adBlockEnabled = true;
-  bool _isFetchingStreams = false;
+  final bool _isFetchingStreams = false;
 
   static final _userAgent = Platform.isAndroid
       ? 'Mozilla/5.0 (Linux; Android 13; Pixel 7) '
@@ -184,83 +180,15 @@ class _BrowserPageState extends State<BrowserPage>
     final url = _currentUrl;
     if (_isStartPage(url)) return;
 
-    if (YouTubeExtractor.isYouTubeUrl(url)) {
-      await _handleYouTubeDownload(url);
-    } else {
-      context.read<DownloaderBloc>().add(StartDownloadEvent(url: url));
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            backgroundColor: AppTheme.surface(context),
-            behavior: SnackBarBehavior.floating,
-            content: Text(
-              'Download started — check the Downloads tab',
-              style: TextStyle(color: AppTheme.neonCyan, fontSize: 13),
-            ),
-          ),
-        );
-      }
-    }
-  }
-
-  Future<void> _handleYouTubeDownload(String url) async {
-    if (_isFetchingStreams) return;
-    setState(() => _isFetchingStreams = true);
-
-    final extractor = di.sl<YouTubeExtractor>();
-    // Kick off extraction immediately so the bottom sheet can render a
-    // skeleton while we wait.
-    final streamsFuture = extractor.extractStreams(url);
-
-    final selected = await showModalBottomSheet<StreamOption>(
-      context: context,
-      isScrollControlled: true,
-      backgroundColor: Colors.transparent,
-      builder: (_) => QualityBottomSheet(streamsFuture: streamsFuture),
-    );
-
-    if (mounted) {
-      setState(() => _isFetchingStreams = false);
-    }
-
-    if (selected == null || !mounted) return;
-
-    final downloadUrl = selected.url;
-
-    final metadata = DownloadMetadata(
-      fileMetadata: FileMetadata(
-        title: selected.title,
-        thumbnailUrl: selected.thumbnailUrl,
-        author: selected.author,
-        duration: selected.duration,
-        sourceUrl: url,
-        downloadedAt: DateTime.now(),
-        fileSizeBytes: selected.sizeBytes ?? 0,
-        format: selected.format,
-        quality: selected.quality,
-      ),
-      youtubeMetadata: YouTubeMetadata(
-        videoId: YouTubeExtractor.parseVideoId(url),
-        itag: selected.itag,
-        audioItag: selected.audioItag,
-        audioFormat: selected.audioFormat,
-      ),
-    );
-
-    context.read<DownloaderBloc>().add(
-      StartDownloadEvent(url: downloadUrl, metadata: metadata),
-    );
-
+    context.read<DownloaderBloc>().add(StartDownloadEvent(url: url));
     if (mounted) {
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
           backgroundColor: AppTheme.surface(context),
           behavior: SnackBarBehavior.floating,
           content: Text(
-            'Downloading: ${selected.title}',
+            'Download started — check the Downloads tab',
             style: TextStyle(color: AppTheme.neonCyan, fontSize: 13),
-            maxLines: 1,
-            overflow: TextOverflow.ellipsis,
           ),
         ),
       );

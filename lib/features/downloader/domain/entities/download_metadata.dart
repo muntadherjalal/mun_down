@@ -65,10 +65,9 @@ class DownloadMetadata extends Equatable {
   final YouTubeMetadata? youtubeMetadata;
 
   const DownloadMetadata({
-    required FileMetadata fileMetadata,
-    YouTubeMetadata? youtubeMetadata,
-  })  : fileMetadata = fileMetadata,
-        youtubeMetadata = youtubeMetadata;
+    required this.fileMetadata,
+    this.youtubeMetadata,
+  });
 
   // Delegate file metadata properties for backward compatibility
   String get title => fileMetadata.title;
@@ -103,6 +102,31 @@ class DownloadMetadata extends Equatable {
     return DownloadMetadata(
       fileMetadata: fileMetadata ?? this.fileMetadata,
       youtubeMetadata: youtubeMetadata ?? this.youtubeMetadata,
+    );
+  }
+
+  /// Creates a DownloadMetadata from a JSON map.
+  factory DownloadMetadata.fromJson(Map<String, dynamic> json) {
+    return DownloadMetadata(
+      fileMetadata: FileMetadata(
+        title: json['title'],
+        thumbnailUrl: json['thumbnailUrl'],
+        author: json['author'],
+        duration: json['duration'] != null
+            ? Duration(seconds: json['duration'])
+            : null,
+        sourceUrl: json['sourceUrl'],
+        downloadedAt: DateTime.parse(json['downloadedAt']),
+        fileSizeBytes: json['fileSizeBytes'],
+        format: json['format'],
+        quality: json['quality'],
+      ),
+      youtubeMetadata: YouTubeMetadata(
+        videoId: json['videoId'] as String?,
+        itag: json['itag'] as int?,
+        audioItag: json['audioItag'] as int?,
+        audioFormat: json['audioFormat'] as String?,
+      ),
     );
   }
 
